@@ -2,6 +2,8 @@
 
 The Go SDK for [PropRaven](https://propraven.com) — national property intelligence over 230M+ U.S. parcels.
 
+Generated from the [OpenAPI 3.1 spec](https://api.propraven.com/openapi.json) via [Stainless](https://www.stainless.com). Webhook signature verification is hand-maintained alongside the generated code.
+
 ```bash
 go get github.com/jdw2111/propraven-go@latest
 ```
@@ -17,44 +19,52 @@ import (
     "log"
     "os"
 
-    propraven "github.com/jdw2111/propraven-go"
+    "github.com/jdw2111/propraven-go"
+    "github.com/jdw2111/propraven-go/option"
 )
 
 func main() {
-    client, err := propraven.NewClient(
-        propraven.WithAPIKey(os.Getenv("PROPRAVEN_API_KEY")),
+    client := propraven.NewClient(
+        option.WithAPIKey(os.Getenv("PROPRAVEN_API_KEY")),
     )
-    if err != nil {
-        log.Fatal(err)
-    }
 
     ctx := context.Background()
 
-    parcel, err := client.Parcels.Get(ctx, "06037:1234-567-890")
+    parcel, err := client.V1.Parcels.Get(ctx, "06037:1234-567-890")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("%+v\n", parcel)
-
-    // List all parcels in a county — Iter ranges over every page.
-    for p, err := range client.Parcels.Iter(ctx, propraven.ListOptions{
-        StateFIPS:  "06",
-        CountyFIPS: "037",
-    }) {
-        if err != nil {
-            log.Fatal(err)
-        }
-        fmt.Println(p.ParcelID, p.OwnerName)
-    }
+    fmt.Printf("%+v\n", parcel.ParcelID)
 }
 ```
 
+`PROPRAVEN_API_KEY` and `PROPRAVEN_BASE_URL` are also read from the environment automatically by `NewClient`.
+
+## API surface
+
+All endpoints sit under `client.V1.*`:
+
+- `client.V1.Parcels.Get(ctx, id)` — single parcel
+- `client.V1.Parcels.GetOwner(ctx, id)` — current owner
+- `client.V1.Parcels.GetPermits(ctx, id, params)` — permits on a parcel
+- `client.V1.Parcels.GetDeeds(ctx, id, params)` — recorded deeds
+- `client.V1.Search.Parcels(ctx, params)` — geo + filter search
+- `client.V1.Owners.Get(ctx, entityID)` — consolidated owner entity
+- `client.V1.Owners.GetPortfolio(ctx, entityID, params)` — owner's parcels
+- `client.V1.Deals.Absentee(ctx, params)` / `.Flips(ctx, params)` — deal sourcing
+- `client.V1.Market.GetCounty(ctx, params)` — county-level stats
+- `client.V1.Webhooks.NewEndpoint(ctx, body)` / `ListEndpoints(ctx)` / `DisableEndpoint(ctx, id)` / `GetDeliveries(ctx, id)`
+- `client.V1.Account.Usage(ctx)` — your API key's usage + quota
+- `client.V1.GetCoverage(ctx, params)` — state/county data coverage
+
+Full reference: [pkg.go.dev/github.com/jdw2111/propraven-go](https://pkg.go.dev/github.com/jdw2111/propraven-go).
+
 ## Webhook verification
 
-Every PropRaven webhook delivery carries an `X-PropRaven-Signature` header. Verify it server-side:
+`propraven.VerifyWebhook` does constant-time HMAC-SHA256 verification with a 5-minute replay window. Use it in your inbound handler:
 
 ```go
-import propraven "github.com/jdw2111/propraven-go"
+import "github.com/jdw2111/propraven-go"
 
 func webhookHandler(w http.ResponseWriter, r *http.Request) {
     body, _ := io.ReadAll(r.Body)
@@ -64,65 +74,44 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "invalid signature", http.StatusUnauthorized)
         return
     }
-
-    // Process the event...
+    // Process the event…
     w.WriteHeader(http.StatusOK)
 }
 ```
 
-Verification is constant-time, enforces a 5-minute replay window by default, and protects against tampered bodies.
+Tune the replay window with `propraven.VerifyWebhookOptions{MaxClockSkew: ...}`.
 
 ## Error handling
 
-Every non-2xx response unwraps to a typed `*propraven.Error`:
+Non-2xx responses unwrap to `*propraven.Error`:
 
 ```go
-parcel, err := client.Parcels.Get(ctx, "missing")
+parcel, err := client.V1.Parcels.Get(ctx, "missing")
 if err != nil {
     var pe *propraven.Error
     if errors.As(err, &pe) {
-        fmt.Printf("Status: %d, Code: %s, RequestID: %s\n", pe.Status, pe.Code, pe.RequestID)
+        log.Printf("status=%d request_id=%s", pe.StatusCode, pe.Header.Get("X-Request-Id"))
     }
-    if propraven.IsNotFound(err) { /* ... */ }
-    if propraven.IsRateLimited(err) { /* back off and retry */ }
 }
 ```
 
-Always quote `RequestID` in support tickets — it's the join key for our logs.
-
-## Resources covered in v0.1
-
-- `client.Parcels.Get(ctx, parcelID)`
-- `client.Parcels.List(ctx, ListOptions{...})` + `.Iter(...)` for ranging
-- `client.Owners.Get(ctx, ownerEntityID)`
-- `client.Owners.Search(ctx, OwnerSearchOptions{...})`
-- `client.Deeds.Search(ctx, DeedSearchOptions{...})`
-- `client.Permits.Search(ctx, PermitSearchOptions{...})`
-- `client.Webhooks.Create/List/Delete(...)`
-- `client.Health.Check(ctx)`
-- `propraven.VerifyWebhook(sig, body, secret)`
-
-Additional endpoints (coverage, deals, market, audit) ship over v0.x as customer demand surfaces. Full REST is always usable directly through `WithHTTPClient(...)` if you need an endpoint we haven't wrapped yet.
+The client retries on 429 and idempotent 5xx by default. Disable via `option.WithMaxRetries(0)`.
 
 ## Options
 
 ```go
-client, _ := propraven.NewClient(
-    propraven.WithAPIKey(os.Getenv("PROPRAVEN_API_KEY")),
-    propraven.WithBaseURL("https://api.propraven.com"),       // override for self-host
-    propraven.WithTimeout(60 * time.Second),                  // default 30s
-    propraven.WithHTTPClient(myInstrumentedClient),           // inject OTel transport
-    propraven.WithUserAgent("acme-pricing/1.0"),              // identifies your app
+client := propraven.NewClient(
+    option.WithAPIKey(os.Getenv("PROPRAVEN_API_KEY")),
+    option.WithBaseURL("https://api.propraven.com"),
+    option.WithMaxRetries(3),
+    option.WithRequestTimeout(60 * time.Second),
+    option.WithHeader("X-Trace-Id", "..."),
 )
 ```
 
-## Source of truth
+## Versioning
 
-This SDK is hand-crafted against the [OpenAPI 3.1 spec](https://api.propraven.com/openapi.json). Both files are co-versioned; SDK releases tag in sync with breaking spec changes.
-
-## Status
-
-v0.1.x — under active development; minor versions add resources without breaking existing signatures. v1.0 freezes the surface.
+This SDK follows the version of the underlying OpenAPI spec; minor versions add resources without breaking existing signatures, and v1.0 freezes the surface. Track the [changelog](https://propraven.com/changelog) for spec changes.
 
 ## License
 

@@ -19,12 +19,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify Version constant matches tag
+      - name: Verify PackageVersion constant matches tag
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
-          CONST=$(grep -oE 'Version = "[^"]+"' version.go | sed -E 's/.*"([^"]+)".*/\1/')
+          CONST=$(grep -oE 'PackageVersion = "[^"]+"' internal/version.go | sed -E 's/.*"([^"]+)".*/\1/')
           if [ "$TAG" != "$CONST" ]; then
-            echo "Tag v$TAG doesn't match Version constant \"$CONST\""
+            echo "Tag v$TAG doesn't match internal.PackageVersion \"$CONST\""
             exit 1
           fi
 

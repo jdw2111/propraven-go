@@ -1,104 +1,243 @@
-package propraven
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
+package propraven_test
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"strings"
+	"reflect"
 	"testing"
+	"time"
+
+	"github.com/jdw2111/propraven-go"
+	"github.com/jdw2111/propraven-go/internal"
+	"github.com/jdw2111/propraven-go/option"
 )
 
-func TestNewClient_RequiresAPIKey(t *testing.T) {
-	_, err := NewClient()
-	if err == nil || !strings.Contains(err.Error(), "API key required") {
-		t.Fatalf("expected API key required, got: %v", err)
+type closureTransport struct {
+	fn func(req *http.Request) (*http.Response, error)
+}
+
+func (t *closureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.fn(req)
+}
+
+func TestUserAgentHeader(t *testing.T) {
+	var userAgent string
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					userAgent = req.Header.Get("User-Agent")
+					return &http.Response{
+						StatusCode: http.StatusOK,
+					}, nil
+				},
+			},
+		}),
+	)
+	_, _ = client.V1.Parcels.Get(context.Background(), "REPLACE_ME")
+	if userAgent != fmt.Sprintf("Propraven/Go %s", internal.PackageVersion) {
+		t.Errorf("Expected User-Agent to be correct, but got: %#v", userAgent)
 	}
 }
 
-func TestParcelsGet_HappyPath(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer pz_test" {
-			t.Errorf("missing/incorrect Authorization header: %q", got)
-		}
-		if r.URL.Path != "/v1/parcels/06037:1234" {
-			t.Errorf("unexpected path: %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(Parcel{ParcelID: "06037:1234", StateFIPS: "06", CountyFIPS: "037"})
-	}))
-	t.Cleanup(srv.Close)
-
-	c, err := NewClient(WithAPIKey("pz_test"), WithBaseURL(srv.URL))
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, err := c.Parcels.Get(context.Background(), "06037:1234")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.ParcelID != "06037:1234" {
-		t.Errorf("unexpected parcel: %+v", p)
-	}
-}
-
-func TestErrorDecoding_NotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Request-Id", "req_abc")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":"Parcel not found","code":"parcel_not_found"}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	c, _ := NewClient(WithAPIKey("pz_test"), WithBaseURL(srv.URL))
-	_, err := c.Parcels.Get(context.Background(), "missing")
+func TestRetryAfter(t *testing.T) {
+	retryCountHeaders := make([]string, 0)
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					retryCountHeaders = append(retryCountHeaders, req.Header.Get("X-Stainless-Retry-Count"))
+					return &http.Response{
+						StatusCode: http.StatusTooManyRequests,
+						Header: http.Header{
+							http.CanonicalHeaderKey("Retry-After"): []string{"0.1"},
+						},
+					}, nil
+				},
+			},
+		}),
+	)
+	_, err := client.V1.Parcels.Get(context.Background(), "REPLACE_ME")
 	if err == nil {
-		t.Fatal("expected error")
+		t.Error("Expected there to be a cancel error")
 	}
-	var pe *Error
-	if !errors.As(err, &pe) {
-		t.Fatalf("expected *propraven.Error, got %T", err)
+
+	attempts := len(retryCountHeaders)
+	if attempts != 3 {
+		t.Errorf("Expected %d attempts, got %d", 3, attempts)
 	}
-	if pe.Status != 404 || pe.Code != "parcel_not_found" || pe.RequestID != "req_abc" {
-		t.Errorf("unexpected error fields: %+v", pe)
-	}
-	if !IsNotFound(err) {
-		t.Error("IsNotFound returned false")
+
+	expectedRetryCountHeaders := []string{"0", "1", "2"}
+	if !reflect.DeepEqual(retryCountHeaders, expectedRetryCountHeaders) {
+		t.Errorf("Expected %v retry count headers, got %v", expectedRetryCountHeaders, retryCountHeaders)
 	}
 }
 
-func TestErrorDecoding_RateLimited(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"error":"rate limit"}`))
-	}))
-	t.Cleanup(srv.Close)
+func TestDeleteRetryCountHeader(t *testing.T) {
+	retryCountHeaders := make([]string, 0)
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					retryCountHeaders = append(retryCountHeaders, req.Header.Get("X-Stainless-Retry-Count"))
+					return &http.Response{
+						StatusCode: http.StatusTooManyRequests,
+						Header: http.Header{
+							http.CanonicalHeaderKey("Retry-After"): []string{"0.1"},
+						},
+					}, nil
+				},
+			},
+		}),
+		option.WithHeaderDel("X-Stainless-Retry-Count"),
+	)
+	_, err := client.V1.Parcels.Get(context.Background(), "REPLACE_ME")
+	if err == nil {
+		t.Error("Expected there to be a cancel error")
+	}
 
-	c, _ := NewClient(WithAPIKey("pz_test"), WithBaseURL(srv.URL))
-	_, err := c.Parcels.Get(context.Background(), "anything")
-	if !IsRateLimited(err) {
-		t.Fatalf("IsRateLimited false, err=%v", err)
+	expectedRetryCountHeaders := []string{"", "", ""}
+	if !reflect.DeepEqual(retryCountHeaders, expectedRetryCountHeaders) {
+		t.Errorf("Expected %v retry count headers, got %v", expectedRetryCountHeaders, retryCountHeaders)
 	}
 }
 
-func TestParcelsList_PassesQuery(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("state_fips") != "06" {
-			t.Errorf("missing state_fips: %v", r.URL.RawQuery)
-		}
-		if r.URL.Query().Get("limit") != "25" {
-			t.Errorf("missing limit: %v", r.URL.RawQuery)
-		}
-		json.NewEncoder(w).Encode(ParcelPage{Data: []Parcel{{ParcelID: "06037:1"}}, NextCursor: ""})
-	}))
-	t.Cleanup(srv.Close)
-
-	c, _ := NewClient(WithAPIKey("pz_test"), WithBaseURL(srv.URL))
-	page, err := c.Parcels.List(context.Background(), ListOptions{StateFIPS: "06", Limit: 25})
-	if err != nil {
-		t.Fatal(err)
+func TestOverwriteRetryCountHeader(t *testing.T) {
+	retryCountHeaders := make([]string, 0)
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					retryCountHeaders = append(retryCountHeaders, req.Header.Get("X-Stainless-Retry-Count"))
+					return &http.Response{
+						StatusCode: http.StatusTooManyRequests,
+						Header: http.Header{
+							http.CanonicalHeaderKey("Retry-After"): []string{"0.1"},
+						},
+					}, nil
+				},
+			},
+		}),
+		option.WithHeader("X-Stainless-Retry-Count", "42"),
+	)
+	_, err := client.V1.Parcels.Get(context.Background(), "REPLACE_ME")
+	if err == nil {
+		t.Error("Expected there to be a cancel error")
 	}
-	if len(page.Data) != 1 {
-		t.Errorf("expected 1 parcel, got %d", len(page.Data))
+
+	expectedRetryCountHeaders := []string{"42", "42", "42"}
+	if !reflect.DeepEqual(retryCountHeaders, expectedRetryCountHeaders) {
+		t.Errorf("Expected %v retry count headers, got %v", expectedRetryCountHeaders, retryCountHeaders)
+	}
+}
+
+func TestRetryAfterMs(t *testing.T) {
+	attempts := 0
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					attempts++
+					return &http.Response{
+						StatusCode: http.StatusTooManyRequests,
+						Header: http.Header{
+							http.CanonicalHeaderKey("Retry-After-Ms"): []string{"100"},
+						},
+					}, nil
+				},
+			},
+		}),
+	)
+	_, err := client.V1.Parcels.Get(context.Background(), "REPLACE_ME")
+	if err == nil {
+		t.Error("Expected there to be a cancel error")
+	}
+	if want := 3; attempts != want {
+		t.Errorf("Expected %d attempts, got %d", want, attempts)
+	}
+}
+
+func TestContextCancel(t *testing.T) {
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					<-req.Context().Done()
+					return nil, req.Context().Err()
+				},
+			},
+		}),
+	)
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := client.V1.Parcels.Get(cancelCtx, "REPLACE_ME")
+	if err == nil {
+		t.Error("Expected there to be a cancel error")
+	}
+}
+
+func TestContextCancelDelay(t *testing.T) {
+	client := propraven.NewClient(
+		option.WithAPIKey("My API Key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: &closureTransport{
+				fn: func(req *http.Request) (*http.Response, error) {
+					<-req.Context().Done()
+					return nil, req.Context().Err()
+				},
+			},
+		}),
+	)
+	cancelCtx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)
+	defer cancel()
+	_, err := client.V1.Parcels.Get(cancelCtx, "REPLACE_ME")
+	if err == nil {
+		t.Error("expected there to be a cancel error")
+	}
+}
+
+func TestContextDeadline(t *testing.T) {
+	testTimeout := time.After(3 * time.Second)
+	testDone := make(chan struct{})
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	deadlineCtx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	go func() {
+		client := propraven.NewClient(
+			option.WithAPIKey("My API Key"),
+			option.WithHTTPClient(&http.Client{
+				Transport: &closureTransport{
+					fn: func(req *http.Request) (*http.Response, error) {
+						<-req.Context().Done()
+						return nil, req.Context().Err()
+					},
+				},
+			}),
+		)
+		_, err := client.V1.Parcels.Get(deadlineCtx, "REPLACE_ME")
+		if err == nil {
+			t.Error("expected there to be a deadline error")
+		}
+		close(testDone)
+	}()
+
+	select {
+	case <-testTimeout:
+		t.Fatal("client didn't finish in time")
+	case <-testDone:
+		if diff := time.Since(deadline); diff < -30*time.Millisecond || 30*time.Millisecond < diff {
+			t.Fatalf("client did not return within 30ms of context deadline, got %s", diff)
+		}
 	}
 }

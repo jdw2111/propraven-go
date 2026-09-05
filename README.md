@@ -8,6 +8,12 @@ Generated from the [OpenAPI 3.1 spec](https://api.propraven.com/openapi.json) vi
 go get github.com/jdw2111/propraven-go@latest
 ```
 
+## Documentation
+
+- Developer hub: https://propraven.com/developers
+- Hosted MCP server (31 read-only tools): https://propraven.com/docs/mcp
+- REST API v1 reference: https://propraven.com/docs/v1
+
 ## Quickstart
 
 ```go

@@ -5,13 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Test on the oldest version we promise in go.mod and the current
-        # release. Both must pass for a release to ship.
+        # The oldest Go in go.mod and the current release must both pass.
         go: ["1.22", "1.x"]
     steps:
       - uses: actions/checkout@v4
@@ -20,11 +22,16 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+      - name: Generated code is up to date
+        run: |
+          go run ./internal/cmd/generate
+          git diff --exit-code -- . || (echo "::error::run 'go run ./internal/cmd/generate' and commit the result" && exit 1)
+
       - name: go vet
         run: go vet ./...
-
-      - name: go build
-        run: go build ./...
 
       - name: go test
         run: go test -race -count=1 ./...

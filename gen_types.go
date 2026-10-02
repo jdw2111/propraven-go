@@ -6,20 +6,136 @@ import (
 	"encoding/json"
 )
 
+// AssessmentHistoryRecord is generated from the OpenAPI spec.
+type AssessmentHistoryRecord struct {
+	// Source-stated year; null means unknown. Never inferred from a snapshot or capture date.
+	AssessmentYear *int64 `json:"assessment_year,omitempty"`
+
+	// Source-stated year; null means unknown. Never inferred from a snapshot or capture date.
+	TaxYear *int64 `json:"tax_year,omitempty"`
+
+	// Snapshot vintage year, not an assessment year.
+	VintageYear      *int64                            `json:"vintage_year,omitempty"`
+	TotalValue       *float64                          `json:"total_value,omitempty"`
+	LandValue        *float64                          `json:"land_value,omitempty"`
+	ImprovementValue *float64                          `json:"improvement_value,omitempty"`
+	TaxAmount        *float64                          `json:"tax_amount,omitempty"`
+	TaxPaidAmount    *float64                          `json:"tax_paid_amount,omitempty"`
+	Vintage          *string                           `json:"vintage,omitempty"`
+	SourceURL        *string                           `json:"source_url,omitempty"`
+	SourceAsOf       *string                           `json:"source_as_of,omitempty"`
+	ValueBasis       AssessmentHistoryRecordValueBasis `json:"value_basis"`
+	Source           string                            `json:"source"`
+}
+
+// UnmarshalJSON decodes AssessmentHistoryRecord, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *AssessmentHistoryRecord) UnmarshalJSON(data []byte) error {
+	type plain AssessmentHistoryRecord
+	aux := struct {
+		*plain
+		AssessmentYear   lenientNumber[int64]   `json:"assessment_year"`
+		TaxYear          lenientNumber[int64]   `json:"tax_year"`
+		VintageYear      lenientNumber[int64]   `json:"vintage_year"`
+		TotalValue       lenientNumber[float64] `json:"total_value"`
+		LandValue        lenientNumber[float64] `json:"land_value"`
+		ImprovementValue lenientNumber[float64] `json:"improvement_value"`
+		TaxAmount        lenientNumber[float64] `json:"tax_amount"`
+		TaxPaidAmount    lenientNumber[float64] `json:"tax_paid_amount"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.AssessmentYear.assignPtr(&r.AssessmentYear)
+	aux.TaxYear.assignPtr(&r.TaxYear)
+	aux.VintageYear.assignPtr(&r.VintageYear)
+	aux.TotalValue.assignPtr(&r.TotalValue)
+	aux.LandValue.assignPtr(&r.LandValue)
+	aux.ImprovementValue.assignPtr(&r.ImprovementValue)
+	aux.TaxAmount.assignPtr(&r.TaxAmount)
+	aux.TaxPaidAmount.assignPtr(&r.TaxPaidAmount)
+	return softTypeError(err)
+}
+
+// AssessmentHistoryRecordValueBasis is generated from the OpenAPI spec. It is a string; the
+// AssessmentHistoryRecordValueBasis* constants list the documented values.
+type AssessmentHistoryRecordValueBasis = string
+
+// Documented values of AssessmentHistoryRecordValueBasis.
+const (
+	AssessmentHistoryRecordValueBasisAssessed  AssessmentHistoryRecordValueBasis = "assessed"
+	AssessmentHistoryRecordValueBasisAppraised AssessmentHistoryRecordValueBasis = "appraised"
+	AssessmentHistoryRecordValueBasisMarket    AssessmentHistoryRecordValueBasis = "market"
+	AssessmentHistoryRecordValueBasisTaxable   AssessmentHistoryRecordValueBasis = "taxable"
+)
+
+// AssessmentHistory is generated from the OpenAPI spec.
+type AssessmentHistory struct {
+	CanonicalID string                    `json:"canonical_id"`
+	Status      AssessmentHistoryStatus   `json:"status"`
+	Records     []AssessmentHistoryRecord `json:"records"`
+	Coverage    AssessmentHistoryCoverage `json:"coverage"`
+}
+
+// AssessmentHistoryStatus is generated from the OpenAPI spec. It is a string; the
+// AssessmentHistoryStatus* constants list the documented values.
+type AssessmentHistoryStatus = string
+
+// Documented values of AssessmentHistoryStatus.
+const (
+	AssessmentHistoryStatusOk    AssessmentHistoryStatus = "ok"
+	AssessmentHistoryStatusEmpty AssessmentHistoryStatus = "empty"
+)
+
+// AssessmentHistoryCoverage is generated from the OpenAPI spec.
+type AssessmentHistoryCoverage struct {
+	AssessmentYears []int64 `json:"assessment_years"`
+	TaxYears        []int64 `json:"tax_years"`
+	RecordCount     int64   `json:"record_count"`
+	Truncated       bool    `json:"truncated"`
+	Limit           int64   `json:"limit"`
+	Note            string  `json:"note"`
+	SourceProduct   string  `json:"source_product"`
+	SourceVersion   string  `json:"source_version"`
+}
+
+// UnmarshalJSON decodes AssessmentHistoryCoverage, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *AssessmentHistoryCoverage) UnmarshalJSON(data []byte) error {
+	type plain AssessmentHistoryCoverage
+	aux := struct {
+		*plain
+		AssessmentYears lenientSlice[int64]  `json:"assessment_years"`
+		TaxYears        lenientSlice[int64]  `json:"tax_years"`
+		RecordCount     lenientNumber[int64] `json:"record_count"`
+		Limit           lenientNumber[int64] `json:"limit"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.AssessmentYears.assign(&r.AssessmentYears)
+	aux.TaxYears.assign(&r.TaxYears)
+	aux.RecordCount.assign(&r.RecordCount)
+	aux.Limit.assign(&r.Limit)
+	return softTypeError(err)
+}
+
 // Parcel is generated from the OpenAPI spec.
 type Parcel struct {
+	// PropRaven parcel UUID. Accepted by GET /parcels/{id}.
 	ID string `json:"id"`
 
-	// 5-digit county FIPS code.
+	// 3-digit within-state county FIPS code (the 5-digit form is `state_fips` + `county_fips`).
 	CountyFIPS string `json:"county_fips"`
-	StateFIPS  string `json:"state_fips"`
 
-	// County-assigned parcel identifier.
-	ParcelID                 string   `json:"parcel_id"`
-	Address                  *string  `json:"address,omitempty"`
-	NormalizedAddress        *string  `json:"normalized_address,omitempty"`
-	City                     *string  `json:"city,omitempty"`
-	State                    *float64 `json:"state,omitempty"`
+	// 2-digit state FIPS code.
+	StateFIPS string `json:"state_fips"`
+
+	// County-assigned parcel identifier (APN as the county publishes it). The canonical id is
+	// `state_fips:county_fips:parcel_id`.
+	ParcelID          string  `json:"parcel_id"`
+	Address           *string `json:"address,omitempty"`
+	NormalizedAddress *string `json:"normalized_address,omitempty"`
+	City              *string `json:"city,omitempty"`
+
+	// State FIPS as a number (legacy duplicate of `state_fips`).
+	State                    *int64   `json:"state,omitempty"`
 	Zip                      *string  `json:"zip,omitempty"`
 	Zip5                     *string  `json:"zip5,omitempty"`
 	ZipPlus4                 *string  `json:"zip_plus4,omitempty"`
@@ -112,7 +228,7 @@ func (r *Parcel) UnmarshalJSON(data []byte) error {
 	type plain Parcel
 	aux := struct {
 		*plain
-		State                      lenientNumber[float64] `json:"state"`
+		State                      lenientNumber[int64]   `json:"state"`
 		Latitude                   lenientNumber[float64] `json:"latitude"`
 		Longitude                  lenientNumber[float64] `json:"longitude"`
 		TotalAssessedValue         lenientNumber[float64] `json:"total_assessed_value"`
@@ -1567,6 +1683,7 @@ func (r *FullSearchResult) UnmarshalJSON(data []byte) error {
 
 // FullSearchResultResults is generated from the OpenAPI spec.
 type FullSearchResultResults struct {
+	// PropRaven parcel UUID (not the county APN; see `apn`). Pass it to GET /parcels/{id}.
 	ParcelID    string   `json:"parcel_id"`
 	APN         *string  `json:"apn,omitempty"`
 	CountyFIPS  string   `json:"county_fips"`

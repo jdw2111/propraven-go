@@ -190,6 +190,7 @@ if rl != nil {
 
 | Method | HTTP | Summary |
 |---|---|---|
+| `AssessmentHistory(ctx, id, params)` | `GET /api/v1/parcels/{id}/assessment-history` | Get recorded annual assessment history |
 | `Get(ctx, id, params)` | `GET /api/v1/parcels/{id}` | Get parcel by ID |
 | `Owner(ctx, id, params)` | `GET /api/v1/parcels/{id}/owner` | Get parcel owner details and portfolio |
 | `Permits(ctx, id, params)` | `GET /api/v1/parcels/{id}/permits` | Get parcel permits |

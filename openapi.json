@@ -26,6 +26,101 @@
     }
   ],
   "paths": {
+    "/api/v1/parcels/{id}/assessment-history": {
+      "get": {
+        "operationId": "getParcelAssessmentHistory",
+        "summary": "Get recorded annual assessment history",
+        "description": "Returns source-backed historical assessment observations from published county history. Uses exact national parcel identity. Never substitutes the current parcel snapshot. Unknown assessment years remain null; vintage years and tax years are distinct. Missing years are not interpolated. County coverage can be partial by town and year. Unpublished coverage and failed reads return 503, not an empty history. Requires normal API or first-party session authentication.",
+        "tags": [
+          "Parcels"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Canonical state_fips:county_fips:parcel_id, legacy county5:parcel_id, or parcel UUID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Known published coverage; records may be empty for this parcel.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentHistory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or ambiguous parcel identifier.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parcel UUID not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Parcel UUID resolves to conflicting national identities.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "API rate limit exceeded.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "History source is unavailable or not published for this county.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-sdk-group": "parcels",
+        "x-sdk-method": "assessmentHistory"
+      }
+    },
     "/api/v1/parcels/{id}": {
       "get": {
         "operationId": "getParcel",
@@ -7762,7 +7857,8 @@
         "security": [
           {
             "bearerAuth": []
-          }
+          },
+          {}
         ],
         "parameters": [
           {
@@ -17476,7 +17572,37 @@
             "description": "The re-queued delivery.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "status",
+                    "next_attempt_at",
+                    "attempts"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "attempts": {
+                      "type": "integer"
+                    }
+                  }
+                }
               }
             },
             "headers": {
@@ -17670,6 +17796,184 @@
       }
     },
     "schemas": {
+      "AssessmentHistoryRecord": {
+        "type": "object",
+        "required": [
+          "assessment_year",
+          "tax_year",
+          "vintage_year",
+          "total_value",
+          "land_value",
+          "improvement_value",
+          "tax_amount",
+          "tax_paid_amount",
+          "vintage",
+          "source_url",
+          "source_as_of",
+          "value_basis",
+          "source"
+        ],
+        "properties": {
+          "assessment_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Source-stated year; null means unknown. Never inferred from a snapshot or capture date."
+          },
+          "tax_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Source-stated year; null means unknown. Never inferred from a snapshot or capture date."
+          },
+          "vintage_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Snapshot vintage year, not an assessment year."
+          },
+          "total_value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "land_value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "improvement_value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "tax_amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "tax_paid_amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "vintage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_as_of": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value_basis": {
+            "type": "string",
+            "enum": [
+              "assessed",
+              "appraised",
+              "market",
+              "taxable"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
+      "AssessmentHistory": {
+        "type": "object",
+        "required": [
+          "canonical_id",
+          "status",
+          "records",
+          "coverage"
+        ],
+        "properties": {
+          "canonical_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "empty"
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentHistoryRecord"
+            }
+          },
+          "coverage": {
+            "type": "object",
+            "required": [
+              "assessment_years",
+              "tax_years",
+              "record_count",
+              "truncated",
+              "limit",
+              "note",
+              "source_product",
+              "source_version"
+            ],
+            "properties": {
+              "assessment_years": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "tax_years": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "record_count": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "note": {
+                "type": "string"
+              },
+              "source_product": {
+                "type": "string"
+              },
+              "source_version": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "Parcel": {
         "type": "object",
         "required": [
@@ -17764,21 +18068,24 @@
         ],
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "description": "PropRaven parcel UUID. Accepted by GET /parcels/{id}."
           },
           "county_fips": {
             "type": "string",
-            "description": "5-digit county FIPS code.",
-            "example": "37183"
+            "description": "3-digit within-state county FIPS code (the 5-digit form is `state_fips` + `county_fips`).",
+            "example": "119"
           },
           "state_fips": {
             "type": "string",
+            "description": "2-digit state FIPS code.",
             "example": "37"
           },
           "parcel_id": {
             "type": "string",
-            "description": "County-assigned parcel identifier.",
-            "example": "0012345"
+            "description": "County-assigned parcel identifier (APN as the county publishes it). The canonical id is `state_fips:county_fips:parcel_id`.",
+            "example": "12104406"
           },
           "address": {
             "type": [
@@ -17802,9 +18109,10 @@
           },
           "state": {
             "type": [
-              "number",
+              "integer",
               "null"
-            ]
+            ],
+            "description": "State FIPS as a number (legacy duplicate of `state_fips`)."
           },
           "zip": {
             "type": [
@@ -21091,7 +21399,8 @@
               ],
               "properties": {
                 "parcel_id": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "PropRaven parcel UUID (not the county APN; see `apn`). Pass it to GET /parcels/{id}."
                 },
                 "apn": {
                   "type": [

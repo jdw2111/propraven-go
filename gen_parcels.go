@@ -12,6 +12,37 @@ type ParcelsService struct {
 	client *Client
 }
 
+// AssessmentHistory: Get recorded annual assessment history
+//
+// Returns source-backed historical assessment observations from published county history. Uses
+// exact national parcel identity. Never substitutes the current parcel snapshot. Unknown
+// assessment years remain null; vintage years and tax years are distinct. Missing years are not
+// interpolated. County coverage can be partial by town and year. Unpublished coverage and failed
+// reads return 503, not an empty history. Requires normal API or first-party session
+// authentication.
+//
+// HTTP: GET /api/v1/parcels/{id}/assessment-history
+func (s *ParcelsService) AssessmentHistory(ctx context.Context, id string, params *ParcelsAssessmentHistoryParams, opts ...RequestOption) (*ParcelsAssessmentHistoryResponse, error) {
+	var out ParcelsAssessmentHistoryResponse
+	if err := s.client.do(ctx, buildParcelsAssessmentHistoryRequest(id, params), opts, decodeJSON(&out)); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func buildParcelsAssessmentHistoryRequest(id string, params *ParcelsAssessmentHistoryParams) *apiRequest {
+	req := newRequest("GET", "/api/v1/parcels/"+pathParam(id)+"/assessment-history")
+	return req
+}
+
+// ParcelsAssessmentHistoryParams holds the query, header and JSON-body parameters of
+// [ParcelsService.AssessmentHistory]. Pass nil when you need none.
+type ParcelsAssessmentHistoryParams struct {
+}
+
+// ParcelsAssessmentHistoryResponse: Get recorded annual assessment history
+type ParcelsAssessmentHistoryResponse = AssessmentHistory
+
 // Get: Get parcel by ID
 //
 // Retrieve a single parcel by its composite ID (county_fips:parcel_id).

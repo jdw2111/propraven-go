@@ -237,4 +237,31 @@ type WebhooksRetryDeliveryParams struct {
 }
 
 // WebhooksRetryDeliveryResponse: Re-queue a failed webhook delivery
-type WebhooksRetryDeliveryResponse = json.RawMessage
+type WebhooksRetryDeliveryResponse struct {
+	ID            string                              `json:"id"`
+	Status        WebhooksRetryDeliveryResponseStatus `json:"status"`
+	NextAttemptAt *string                             `json:"next_attempt_at,omitempty"`
+	Attempts      int64                               `json:"attempts"`
+}
+
+// UnmarshalJSON decodes WebhooksRetryDeliveryResponse, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *WebhooksRetryDeliveryResponse) UnmarshalJSON(data []byte) error {
+	type plain WebhooksRetryDeliveryResponse
+	aux := struct {
+		*plain
+		Attempts lenientNumber[int64] `json:"attempts"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Attempts.assign(&r.Attempts)
+	return softTypeError(err)
+}
+
+// WebhooksRetryDeliveryResponseStatus is generated from the OpenAPI spec. It is a string; the
+// WebhooksRetryDeliveryResponseStatus* constants list the documented values.
+type WebhooksRetryDeliveryResponseStatus = string
+
+// Documented values of WebhooksRetryDeliveryResponseStatus.
+const (
+	WebhooksRetryDeliveryResponseStatusPending WebhooksRetryDeliveryResponseStatus = "pending"
+)

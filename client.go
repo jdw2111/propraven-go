@@ -1,127 +1,218 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 package propraven
 
 import (
-	"context"
+	"io"
+	"log"
 	"net/http"
 	"os"
-	"slices"
 	"strings"
+	"sync"
+	"time"
 
-	"github.com/jdw2111/propraven-go/internal/requestconfig"
-	"github.com/jdw2111/propraven-go/option"
+	"github.com/jdw2111/propraven-go/internal"
 )
 
-// Client creates a struct with services and top level methods that help with
-// interacting with the propraven API. You should not instantiate this client
-// directly, and instead use the [NewClient] method instead.
-type Client struct {
-	options []option.RequestOption
-	// Data coverage statistics.
-	V1 V1Service
+// Version is the SDK version, sent in the User-Agent header.
+const Version = internal.PackageVersion
+
+// DefaultBaseURL is the production API origin. Every operation path already
+// starts with /api/v1.
+const DefaultBaseURL = "https://propraven.com"
+
+const (
+	defaultTimeout    = 60 * time.Second
+	defaultMaxRetries = 2
+	maxRetryWait      = 60 * time.Second
+)
+
+// Option configures a [Client] (passed to [NewClient]) or a single request
+// (passed as a trailing argument to any operation method). Options given to a
+// method apply to that call only and override the client's settings.
+type Option func(*config)
+
+// RequestOption is an [Option] passed to a single operation call. It is the
+// same type as Option; the separate name documents intent in signatures.
+type RequestOption = Option
+
+type config struct {
+	apiKey     string
+	baseURL    string
+	httpClient *http.Client
+	maxRetries int
+	timeout    time.Duration
+	headers    http.Header
+	logger     *log.Logger
+	raw        *RawResponse
 }
 
-// DefaultClientOptions read from the environment (PROPRAVEN_API_KEY,
-// PROPRAVEN_BASE_URL). This should be used to initialize new clients.
-func DefaultClientOptions() []option.RequestOption {
-	defaults := []option.RequestOption{option.WithHTTPClient(defaultHTTPClient()), option.WithEnvironmentProduction()}
-	if o, ok := os.LookupEnv("PROPRAVEN_BASE_URL"); ok {
-		defaults = append(defaults, option.WithBaseURL(o))
-	}
-	if o, ok := os.LookupEnv("PROPRAVEN_API_KEY"); ok {
-		defaults = append(defaults, option.WithAPIKey(o))
-	}
-	if o, ok := os.LookupEnv("PROPRAVEN_CUSTOM_HEADERS"); ok {
-		for _, line := range strings.Split(o, "\n") {
-			colon := strings.Index(line, ":")
-			if colon >= 0 {
-				defaults = append(defaults, option.WithHeader(strings.TrimSpace(line[:colon]), strings.TrimSpace(line[colon+1:])))
-			}
+func (c config) clone() config {
+	c.headers = c.headers.Clone()
+	return c
+}
+
+// WithAPIKey sets the API key sent as "Authorization: Bearer <key>". It
+// overrides the PROPRAVEN_API_KEY environment variable. Keys start with
+// "pz_"; NewClient logs a warning (and still proceeds) when they do not.
+func WithAPIKey(key string) Option {
+	return func(c *config) { c.apiKey = strings.TrimSpace(key) }
+}
+
+// WithBaseURL overrides the API origin (default https://propraven.com, or
+// the PROPRAVEN_BASE_URL environment variable). Do not include /api/v1.
+func WithBaseURL(baseURL string) Option {
+	return func(c *config) { c.baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/") }
+}
+
+// WithHTTPClient sets the *http.Client used for requests. Its Timeout, if
+// any, applies in addition to [WithTimeout].
+func WithHTTPClient(hc *http.Client) Option {
+	return func(c *config) {
+		if hc != nil {
+			c.httpClient = hc
 		}
 	}
-	return defaults
 }
 
-// NewClient generates a new client with the default option read from the
-// environment (PROPRAVEN_API_KEY, PROPRAVEN_BASE_URL). The option passed in as
-// arguments are applied after these default arguments, and all option will be
-// passed down to the services and requests that this client makes.
-func NewClient(opts ...option.RequestOption) (r Client) {
-	opts = append(DefaultClientOptions(), opts...)
-
-	r = Client{options: opts}
-
-	r.V1 = NewV1Service(opts...)
-
-	return
+// WithMaxRetries sets how many times a failed request is retried (default 2).
+// Zero disables retries.
+func WithMaxRetries(n int) Option {
+	return func(c *config) {
+		if n < 0 {
+			n = 0
+		}
+		c.maxRetries = n
+	}
 }
 
-// Execute makes a request with the given context, method, URL, request params,
-// response, and request options. This is useful for hitting undocumented endpoints
-// while retaining the base URL, auth, retries, and other options from the client.
+// WithTimeout sets the timeout for each HTTP attempt (default 60s). Zero
+// disables the SDK timeout; the context deadline still applies.
+func WithTimeout(d time.Duration) Option {
+	return func(c *config) {
+		if d < 0 {
+			d = 0
+		}
+		c.timeout = d
+	}
+}
+
+// WithHeader adds a header to every request (or to one request when passed
+// to a method). It cannot override Authorization; use [WithAPIKey].
+func WithHeader(key, value string) Option {
+	return func(c *config) {
+		if c.headers == nil {
+			c.headers = http.Header{}
+		}
+		c.headers.Set(key, value)
+	}
+}
+
+// WithLogger sets where the SDK writes warnings (for example an API key that
+// does not start with "pz_"). The default writes to stderr; nil silences it.
+func WithLogger(l *log.Logger) Option {
+	return func(c *config) {
+		if l == nil {
+			l = log.New(io.Discard, "", 0)
+		}
+		c.logger = l
+	}
+}
+
+// RawResponse receives the final HTTP response of a call when passed through
+// [WithRawResponse]. It is filled for both successful and failed calls.
+type RawResponse struct {
+	StatusCode int
+	Header     http.Header
+	Body       []byte
+}
+
+// WithRawResponse captures the raw status, headers and body of one call into
+// dst. Useful for fields the typed response does not model yet.
+func WithRawResponse(dst *RawResponse) RequestOption {
+	return func(c *config) { c.raw = dst }
+}
+
+// RateLimit is the rate-limit state reported by the most recent response.
+// A field is -1 when its header was absent.
+type RateLimit struct {
+	// Limit is X-RateLimit-Limit: requests allowed in the current window.
+	Limit int64
+	// Remaining is X-RateLimit-Remaining: requests left in the window.
+	Remaining int64
+	// Reset is X-RateLimit-Reset: when the window resets, Unix seconds.
+	Reset int64
+}
+
+// ResetTime returns Reset as a time.Time (the zero Time when unknown).
+func (r RateLimit) ResetTime() time.Time {
+	if r.Reset < 0 {
+		return time.Time{}
+	}
+	return time.Unix(r.Reset, 0)
+}
+
+// clientCore is the hand-written transport state behind a generated Client.
+type clientCore struct {
+	cfg config
+
+	mu     sync.Mutex
+	lastRL *RateLimit
+
+	// Test hooks.
+	sleep  func(ctxDone <-chan struct{}, d time.Duration) bool
+	now    func() time.Time
+	jitter func() float64 // returns a value in [-1, 1)
+}
+
+// NewClient builds a client. With no options it reads PROPRAVEN_API_KEY and
+// PROPRAVEN_BASE_URL from the environment. A missing API key is allowed:
+// several endpoints are key-optional and the server answers 401 where a key
+// is required.
 //
-// If a byte slice or an [io.Reader] is supplied to params, it will be used as-is
-// for the request body.
-//
-// The params is by default serialized into the body using [encoding/json]. If your
-// type implements a MarshalJSON function, it will be used instead to serialize the
-// request. If a URLQuery method is implemented, the returned [url.Values] will be
-// used as query strings to the url.
-//
-// If your params struct uses [param.Field], you must provide either [MarshalJSON],
-// [URLQuery], and/or [MarshalForm] functions. It is undefined behavior to use a
-// struct uses [param.Field] without specifying how it is serialized.
-//
-// Any "…Params" object defined in this library can be used as the request
-// argument. Note that 'path' arguments will not be forwarded into the url.
-//
-// The response body will be deserialized into the res variable, depending on its
-// type:
-//
-//   - A pointer to a [*http.Response] is populated by the raw response.
-//   - A pointer to a byte array will be populated with the contents of the request
-//     body.
-//   - A pointer to any other type uses this library's default JSON decoding, which
-//     respects UnmarshalJSON if it is defined on the type.
-//   - A nil value will not read the response body.
-//
-// For even greater flexibility, see [option.WithResponseInto] and
-// [option.WithResponseBodyInto].
-func (r *Client) Execute(ctx context.Context, method string, path string, params any, res any, opts ...option.RequestOption) error {
-	opts = slices.Concat(r.options, opts)
-	return requestconfig.ExecuteNewRequest(ctx, method, path, params, res, opts...)
+// The PropRaven REST API is meant to be called from servers: API keys are
+// secrets and the API sends no CORS headers.
+func NewClient(opts ...Option) *Client {
+	cfg := config{
+		apiKey:     strings.TrimSpace(os.Getenv("PROPRAVEN_API_KEY")),
+		baseURL:    DefaultBaseURL,
+		httpClient: &http.Client{},
+		maxRetries: defaultMaxRetries,
+		timeout:    defaultTimeout,
+		headers:    http.Header{},
+		logger:     log.New(os.Stderr, "propraven: ", log.LstdFlags),
+	}
+	if env := strings.TrimSpace(os.Getenv("PROPRAVEN_BASE_URL")); env != "" {
+		cfg.baseURL = strings.TrimRight(env, "/")
+	}
+	for _, o := range opts {
+		if o != nil {
+			o(&cfg)
+		}
+	}
+	cfg.raw = nil
+	if cfg.apiKey != "" && !strings.HasPrefix(cfg.apiKey, "pz_") {
+		cfg.logger.Printf("warning: API key does not start with \"pz_\"; PropRaven keys normally do (continuing anyway)")
+	}
+	c := &Client{core: &clientCore{
+		cfg:    cfg,
+		sleep:  sleepCtx,
+		now:    time.Now,
+		jitter: defaultJitter,
+	}}
+	c.initServices()
+	return c
 }
 
-// Get makes a GET request with the given URL, params, and optionally deserializes
-// to a response. See [Execute] documentation on the params and response.
-func (r *Client) Get(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodGet, path, params, res, opts...)
+// LastRateLimit returns the rate-limit headers of the most recent response
+// that carried any, or nil if none has yet.
+func (c *Client) LastRateLimit() *RateLimit {
+	c.core.mu.Lock()
+	defer c.core.mu.Unlock()
+	if c.core.lastRL == nil {
+		return nil
+	}
+	rl := *c.core.lastRL
+	return &rl
 }
 
-// Post makes a POST request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Post(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPost, path, params, res, opts...)
-}
-
-// Put makes a PUT request with the given URL, params, and optionally deserializes
-// to a response. See [Execute] documentation on the params and response.
-func (r *Client) Put(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPut, path, params, res, opts...)
-}
-
-// Patch makes a PATCH request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Patch(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPatch, path, params, res, opts...)
-}
-
-// Delete makes a DELETE request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Delete(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodDelete, path, params, res, opts...)
-}
+// BaseURL returns the API origin the client sends requests to.
+func (c *Client) BaseURL() string { return c.core.cfg.baseURL }

@@ -1,0 +1,64 @@
+name: Regenerate from spec
+
+# Pulls the published OpenAPI spec daily, regenerates the SDK, runs the tests
+# and opens (or updates) a PR from the spec-sync branch when anything changed.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: regenerate
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download spec
+        run: |
+          curl -fsSL --retry 3 https://propraven.com/openapi.json -o openapi.json.new
+          python3 -c 'import json,sys; json.load(open("openapi.json.new"))'
+          mv openapi.json.new openapi.json
+
+      - name: Generate
+        run: go run ./internal/cmd/generate
+
+      - name: Test
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test -race -count=1 ./...
+
+      - name: Open or update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B spec-sync
+          git add -A
+          git commit -m "chore: regenerate from https://propraven.com/openapi.json"
+          git push --force origin spec-sync
+          if gh pr view spec-sync --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit spec-sync --body "Automated regeneration from the published OpenAPI spec (run ${{ github.run_id }}). Tests passed."
+          else
+            gh pr create --head spec-sync --base main \
+              --title "chore: sync generated SDK with the published OpenAPI spec" \
+              --body "Automated regeneration from the published OpenAPI spec (run ${{ github.run_id }}). Tests passed."
+          fi

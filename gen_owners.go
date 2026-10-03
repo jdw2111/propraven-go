@@ -742,8 +742,8 @@ type OwnersTransactionsParams struct {
 
 // OwnersTransactionsResponse: Recorded deed transactions for an owner
 type OwnersTransactionsResponse struct {
-	Data  []OwnerTransaction `json:"data,omitempty"`
-	Count *int64             `json:"count,omitempty"`
+	Data  []OwnerTransaction `json:"data"`
+	Count int64              `json:"count"`
 }
 
 // UnmarshalJSON decodes OwnersTransactionsResponse, accepting numeric fields sent as JSON numbers or as
@@ -755,7 +755,7 @@ func (r *OwnersTransactionsResponse) UnmarshalJSON(data []byte) error {
 		Count lenientNumber[int64] `json:"count"`
 	}{plain: (*plain)(r)}
 	err := json.Unmarshal(data, &aux)
-	aux.Count.assignPtr(&r.Count)
+	aux.Count.assign(&r.Count)
 	return softTypeError(err)
 }
 

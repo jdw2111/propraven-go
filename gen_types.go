@@ -2276,8 +2276,10 @@ type CountyDetailMarketStats struct {
 	PriceYoyPct     *float64 `json:"price_yoy_pct,omitempty"`
 
 	// Average days on market.
-	AvgDom      *float64 `json:"avg_dom,omitempty"`
-	RefreshedAt *string  `json:"refreshed_at,omitempty"`
+	AvgDom       *float64  `json:"avg_dom,omitempty"`
+	RefreshedAt  *string   `json:"refreshed_at,omitempty"`
+	UnderReview  []*string `json:"under_review,omitempty"`
+	StaleQuarter *bool     `json:"stale_quarter,omitempty"`
 }
 
 // UnmarshalJSON decodes CountyDetailMarketStats, accepting numeric fields sent as JSON numbers or as

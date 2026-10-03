@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PropRaven API",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "National property intelligence API: US parcels with ownership, valuation, permit, deed, risk and market data.\n\n**Base URL.** `https://propraven.com/api/v1` (every path below starts with `/api/v1`; `https://api.propraven.com/api/v1` serves the same API). The REST API is for server-side use: it sends no CORS headers, and API keys are secret.\n\n**Authentication.** `Authorization: Bearer pz_…`. Create a key in the dashboard. A few endpoints are key-optional (marked with an empty security requirement); anonymous calls to them are limited to 100 a day and 60 a minute per IP. The Free plan includes 1,000 API calls a month (60 a minute, 1,000 a day); `GET /api/v1/account/usage` reports your plan, period usage and limits.\n\n**Numbers.** Since API 1.2.0, every field this spec types as `number` or `integer` is a JSON number. (Before 1.2.0, values read from Postgres `numeric` and `bigint` columns, such as `total_assessed_value`, were sent as strings like \"19388200.00\".) Identifiers stay strings: `parcel_id`, `apn`, `county_fips`, `state_fips`, `zip`.\n\n**Errors.** Every error is an RFC 7807 problem (`application/problem+json`, schema `Problem`) with a stable `code`. Bad parameters are a 400 `invalid_parameter` naming each one in `errors`; an unknown endpoint is a 404 `not_found`; an unsupported method is a 405 with an `Allow` header; a query that runs out of time is a 504 `query_timeout` with `Retry-After`. Error bodies never contain database text. Paid endpoints answer an unpaid call with an x402 `402 Payment Required` envelope (`x402Version`, `accepts`).\n\n**Pagination.** List endpoints take `limit` and `offset` and return `{data, total, limit, offset}`; request the next page with `offset + limit` until a page is shorter than `limit` or `offset` reaches `total`. `GET /api/v1/search/full` uses a keyset cursor: pass the previous page's `nextCursor` as `after` until `nextCursor` is null.\n\n**Rate limits.** Authenticated responses carry `X-RateLimit-Limit` / `-Remaining` / `-Reset` (Unix seconds), all describing the window that will refuse you first. A 429 carries `Retry-After`.\n\n**SDKs.** Official clients generated from this spec: `@propraven/sdk` (npm), `propraven` (PyPI) and `github.com/jdw2111/propraven-go`. Each retries 429/503/504 with backoff, raises typed errors on the `Problem` shape, paginates, and verifies webhook signatures. The `x-sdk-group`, `x-sdk-method` and `x-sdk-pagination` extensions name each operation in the SDKs.",
     "contact": {
       "name": "PropRaven Support",
@@ -3211,6 +3211,21 @@
                               "null"
                             ]
                           },
+                          "under_review": {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "stale_quarter": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
                           "state_abbr": {
                             "type": "string",
                             "example": "NC"
@@ -3251,16 +3266,31 @@
                           "type": "integer"
                         },
                         "total_sales": {
-                          "type": "integer"
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
                         },
                         "overall_median_price": {
                           "type": "number"
                         },
                         "total_volume": {
-                          "type": "integer"
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
                         },
                         "avg_yoy_pct": {
                           "type": "number"
+                        },
+                        "under_review": {
+                          "type": "array",
+                          "items": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
                         }
                       },
                       "additionalProperties": false
@@ -8088,6 +8118,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "data",
+                    "count"
+                  ],
                   "properties": {
                     "data": {
                       "type": "array",
@@ -8098,7 +8132,8 @@
                     "count": {
                       "type": "integer"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               }
             }
@@ -22460,6 +22495,21 @@
                     "string",
                     "null"
                   ]
+                },
+                "under_review": {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "stale_quarter": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
                 }
               },
               "additionalProperties": false
@@ -22757,9 +22807,22 @@
       },
       "OwnerTransaction": {
         "type": "object",
+        "required": [
+          "document_number",
+          "recording_date",
+          "sale_date",
+          "document_type",
+          "sale_price",
+          "grantor_name",
+          "grantee_name",
+          "property_address"
+        ],
         "properties": {
           "document_number": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "recording_date": {
             "type": [
@@ -22807,7 +22870,8 @@
               "null"
             ]
           }
-        }
+        },
+        "additionalProperties": false
       },
       "AccountUsage": {
         "type": "object",

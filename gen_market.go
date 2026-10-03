@@ -130,21 +130,23 @@ func (r *MarketCountiesResponse) UnmarshalJSON(data []byte) error {
 
 // MarketCountiesResponseData is generated from the OpenAPI spec.
 type MarketCountiesResponseData struct {
-	CountyFIPS      string   `json:"county_fips"`
-	StateFIPS       string   `json:"state_fips"`
-	CountyName      *string  `json:"county_name,omitempty"`
-	State           *string  `json:"state,omitempty"`
-	RefreshedAt     *string  `json:"refreshed_at,omitempty"`
-	Quarter         *string  `json:"quarter,omitempty"`
-	SaleCount       *int64   `json:"sale_count,omitempty"`
-	MedianSalePrice *float64 `json:"median_sale_price,omitempty"`
-	AvgSalePrice    *float64 `json:"avg_sale_price,omitempty"`
-	TotalVolume     *int64   `json:"total_volume,omitempty"`
-	PriceYoyPct     *float64 `json:"price_yoy_pct,omitempty"`
-	AvgDom          *float64 `json:"avg_dom,omitempty"`
-	StateAbbr       *string  `json:"state_abbr,omitempty"`
-	MedianPrice     *float64 `json:"median_price,omitempty"`
-	AvgPrice        *float64 `json:"avg_price,omitempty"`
+	CountyFIPS      string    `json:"county_fips"`
+	StateFIPS       string    `json:"state_fips"`
+	CountyName      *string   `json:"county_name,omitempty"`
+	State           *string   `json:"state,omitempty"`
+	RefreshedAt     *string   `json:"refreshed_at,omitempty"`
+	Quarter         *string   `json:"quarter,omitempty"`
+	SaleCount       *int64    `json:"sale_count,omitempty"`
+	MedianSalePrice *float64  `json:"median_sale_price,omitempty"`
+	AvgSalePrice    *float64  `json:"avg_sale_price,omitempty"`
+	TotalVolume     *int64    `json:"total_volume,omitempty"`
+	PriceYoyPct     *float64  `json:"price_yoy_pct,omitempty"`
+	AvgDom          *float64  `json:"avg_dom,omitempty"`
+	UnderReview     []*string `json:"under_review,omitempty"`
+	StaleQuarter    *bool     `json:"stale_quarter,omitempty"`
+	StateAbbr       *string   `json:"state_abbr,omitempty"`
+	MedianPrice     *float64  `json:"median_price,omitempty"`
+	AvgPrice        *float64  `json:"avg_price,omitempty"`
 
 	// Year-over-year median price change as a decimal (e.g., 0.05 = 5%).
 	YoyChange       *float64 `json:"yoy_change,omitempty"`
@@ -184,11 +186,12 @@ func (r *MarketCountiesResponseData) UnmarshalJSON(data []byte) error {
 
 // MarketCountiesResponseSummary is generated from the OpenAPI spec.
 type MarketCountiesResponseSummary struct {
-	TotalCounties      int64   `json:"total_counties"`
-	TotalSales         int64   `json:"total_sales"`
-	OverallMedianPrice float64 `json:"overall_median_price"`
-	TotalVolume        int64   `json:"total_volume"`
-	AvgYoyPct          float64 `json:"avg_yoy_pct"`
+	TotalCounties      int64     `json:"total_counties"`
+	TotalSales         *int64    `json:"total_sales,omitempty"`
+	OverallMedianPrice float64   `json:"overall_median_price"`
+	TotalVolume        *int64    `json:"total_volume,omitempty"`
+	AvgYoyPct          float64   `json:"avg_yoy_pct"`
+	UnderReview        []*string `json:"under_review,omitempty"`
 }
 
 // UnmarshalJSON decodes MarketCountiesResponseSummary, accepting numeric fields sent as JSON numbers or as
@@ -205,9 +208,9 @@ func (r *MarketCountiesResponseSummary) UnmarshalJSON(data []byte) error {
 	}{plain: (*plain)(r)}
 	err := json.Unmarshal(data, &aux)
 	aux.TotalCounties.assign(&r.TotalCounties)
-	aux.TotalSales.assign(&r.TotalSales)
+	aux.TotalSales.assignPtr(&r.TotalSales)
 	aux.OverallMedianPrice.assign(&r.OverallMedianPrice)
-	aux.TotalVolume.assign(&r.TotalVolume)
+	aux.TotalVolume.assignPtr(&r.TotalVolume)
 	aux.AvgYoyPct.assign(&r.AvgYoyPct)
 	return softTypeError(err)
 }

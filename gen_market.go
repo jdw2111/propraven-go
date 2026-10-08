@@ -130,21 +130,23 @@ func (r *MarketCountiesResponse) UnmarshalJSON(data []byte) error {
 
 // MarketCountiesResponseData is generated from the OpenAPI spec.
 type MarketCountiesResponseData struct {
-	CountyFIPS      string   `json:"county_fips"`
-	StateFIPS       string   `json:"state_fips"`
-	CountyName      *string  `json:"county_name,omitempty"`
-	State           *string  `json:"state,omitempty"`
-	RefreshedAt     *string  `json:"refreshed_at,omitempty"`
-	Quarter         *string  `json:"quarter,omitempty"`
-	SaleCount       *int64   `json:"sale_count,omitempty"`
-	MedianSalePrice *float64 `json:"median_sale_price,omitempty"`
-	AvgSalePrice    *float64 `json:"avg_sale_price,omitempty"`
-	TotalVolume     *int64   `json:"total_volume,omitempty"`
-	PriceYoyPct     *float64 `json:"price_yoy_pct,omitempty"`
-	AvgDom          *float64 `json:"avg_dom,omitempty"`
-	StateAbbr       *string  `json:"state_abbr,omitempty"`
-	MedianPrice     *float64 `json:"median_price,omitempty"`
-	AvgPrice        *float64 `json:"avg_price,omitempty"`
+	CountyFIPS      string    `json:"county_fips"`
+	StateFIPS       string    `json:"state_fips"`
+	CountyName      *string   `json:"county_name,omitempty"`
+	State           *string   `json:"state,omitempty"`
+	RefreshedAt     *string   `json:"refreshed_at,omitempty"`
+	Quarter         *string   `json:"quarter,omitempty"`
+	SaleCount       *int64    `json:"sale_count,omitempty"`
+	MedianSalePrice *float64  `json:"median_sale_price,omitempty"`
+	AvgSalePrice    *float64  `json:"avg_sale_price,omitempty"`
+	TotalVolume     *int64    `json:"total_volume,omitempty"`
+	PriceYoyPct     *float64  `json:"price_yoy_pct,omitempty"`
+	AvgDom          *float64  `json:"avg_dom,omitempty"`
+	UnderReview     []*string `json:"under_review,omitempty"`
+	StaleQuarter    *bool     `json:"stale_quarter,omitempty"`
+	StateAbbr       *string   `json:"state_abbr,omitempty"`
+	MedianPrice     *float64  `json:"median_price,omitempty"`
+	AvgPrice        *float64  `json:"avg_price,omitempty"`
 
 	// Year-over-year median price change as a decimal (e.g., 0.05 = 5%).
 	YoyChange       *float64 `json:"yoy_change,omitempty"`
@@ -184,11 +186,12 @@ func (r *MarketCountiesResponseData) UnmarshalJSON(data []byte) error {
 
 // MarketCountiesResponseSummary is generated from the OpenAPI spec.
 type MarketCountiesResponseSummary struct {
-	TotalCounties      int64   `json:"total_counties"`
-	TotalSales         int64   `json:"total_sales"`
-	OverallMedianPrice float64 `json:"overall_median_price"`
-	TotalVolume        int64   `json:"total_volume"`
-	AvgYoyPct          float64 `json:"avg_yoy_pct"`
+	TotalCounties      int64     `json:"total_counties"`
+	TotalSales         *int64    `json:"total_sales,omitempty"`
+	OverallMedianPrice float64   `json:"overall_median_price"`
+	TotalVolume        *int64    `json:"total_volume,omitempty"`
+	AvgYoyPct          float64   `json:"avg_yoy_pct"`
+	UnderReview        []*string `json:"under_review,omitempty"`
 }
 
 // UnmarshalJSON decodes MarketCountiesResponseSummary, accepting numeric fields sent as JSON numbers or as
@@ -205,9 +208,9 @@ func (r *MarketCountiesResponseSummary) UnmarshalJSON(data []byte) error {
 	}{plain: (*plain)(r)}
 	err := json.Unmarshal(data, &aux)
 	aux.TotalCounties.assign(&r.TotalCounties)
-	aux.TotalSales.assign(&r.TotalSales)
+	aux.TotalSales.assignPtr(&r.TotalSales)
 	aux.OverallMedianPrice.assign(&r.OverallMedianPrice)
-	aux.TotalVolume.assign(&r.TotalVolume)
+	aux.TotalVolume.assignPtr(&r.TotalVolume)
 	aux.AvgYoyPct.assign(&r.AvgYoyPct)
 	return softTypeError(err)
 }
@@ -1009,3 +1012,273 @@ func (r *MarketSnapshotResponseMarketProvenance) UnmarshalJSON(data []byte) erro
 	aux.RecordsWithoutRefresh.assignPtr(&r.RecordsWithoutRefresh)
 	return softTypeError(err)
 }
+
+// ZillowContext: Get qualified regional Zillow context for a property
+//
+// Requires API-key or first-party session authentication and a current account in the default-off
+// server cohort. Valid current membership does not require a new paid subscription. Existing API
+// quotas still apply. Responses are private, no-store. Unknown and repeated query parameters are
+// rejected. This contract does not indicate source activation, deployment or an SDK release.
+// Use-specific, unexpired reviewed Zillow rights are checked before parcel resolution or
+// repository/cache access. Denied/unknown rights return explicit unavailable metric values, not
+// substitute data. Each metric exposes actual regional geography/variant and freshness; regional
+// values do not become parcel estimates or residual inputs. Only the trusted served parcel
+// supplies ZIP/county/state. Caller-supplied geography/CBSA is rejected; there is no inferred
+// metro match. canonical_id is omitted when rights prevent parcel lookup.
+//
+// HTTP: GET /api/v1/market/zillow/context
+func (s *MarketService) ZillowContext(ctx context.Context, params *MarketZillowContextParams, opts ...RequestOption) (*MarketZillowContextResponse, error) {
+	var out MarketZillowContextResponse
+	if err := s.client.do(ctx, buildMarketZillowContextRequest(params), opts, decodeJSON(&out)); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func buildMarketZillowContextRequest(params *MarketZillowContextParams) *apiRequest {
+	req := newRequest("GET", "/api/v1/market/zillow/context")
+	if params != nil {
+		addQuery(req.query, "parcel_id", params.ParcelID)
+		addQuery(req.query, "use", params.Use)
+		addQuery(req.query, "as_of", params.AsOf)
+		addQuery(req.query, "metrics", params.Metrics)
+		addQuery(req.query, "window_months", params.WindowMonths)
+	}
+	return req
+}
+
+// MarketZillowContextParams holds the query, header and JSON-body parameters of
+// [MarketService.ZillowContext]. Pass nil when you need none.
+type MarketZillowContextParams struct {
+	// Canonical or legacy county5 parcel identity. The server derives trusted geography after
+	// source-use approval.
+	//
+	// Required.
+	ParcelID *IntelligenceParcelID `query:"parcel_id" json:"-"`
+
+	// Requested use; checked against current source rights. Agent use is not an external send.
+	Use *MarketZillowContextParamsUse `query:"use" json:"-"`
+
+	// Optional explicit-offset timestamp for the accepted source vintage known at that time.
+	// Future/invalid times rejected; unavailable historical vintages are not reconstructed from
+	// current data.
+	AsOf *string `query:"as_of" json:"-"`
+
+	// Comma-separated unique metric names; defaults to all five. Duplicate names rejected.
+	Metrics *string `query:"metrics" json:"-"`
+
+	// Number of calendar months displayed; missing months remain gaps.
+	WindowMonths *MarketZillowContextParamsWindowMonths `query:"window_months" json:"-"`
+}
+
+// MarketZillowContextParamsUse is generated from the OpenAPI spec. It is a string; the
+// MarketZillowContextParamsUse* constants list the documented values.
+type MarketZillowContextParamsUse = string
+
+// Documented values of MarketZillowContextParamsUse.
+const (
+	MarketZillowContextParamsUseDisplay MarketZillowContextParamsUse = "display"
+	MarketZillowContextParamsUseAgent   MarketZillowContextParamsUse = "agent"
+	MarketZillowContextParamsUseExport  MarketZillowContextParamsUse = "export"
+)
+
+// MarketZillowContextParamsWindowMonths is generated from the OpenAPI spec. It is a string; the
+// MarketZillowContextParamsWindowMonths* constants list the documented values.
+type MarketZillowContextParamsWindowMonths = string
+
+// Documented values of MarketZillowContextParamsWindowMonths.
+const (
+	MarketZillowContextParamsWindowMonthsV12 MarketZillowContextParamsWindowMonths = "12"
+	MarketZillowContextParamsWindowMonthsV36 MarketZillowContextParamsWindowMonths = "36"
+	MarketZillowContextParamsWindowMonthsV60 MarketZillowContextParamsWindowMonths = "60"
+)
+
+// MarketZillowContextResponse: Get qualified regional Zillow context for a property
+type MarketZillowContextResponse = ZillowContext
+
+// ZillowTimeseries: Get one provider region monthly series
+//
+// Requires API-key or first-party session authentication and a current account in the default-off
+// server cohort. Valid current membership does not require a new paid subscription. Existing API
+// quotas still apply. Responses are private, no-store. Unknown and repeated query parameters are
+// rejected. This contract does not indicate source activation, deployment or an SDK release.
+// Use-specific, unexpired reviewed Zillow rights are checked before parcel resolution or
+// repository/cache access. Denied/unknown rights return explicit unavailable metric values, not
+// substitute data. Each metric exposes actual regional geography/variant and freshness; regional
+// values do not become parcel estimates or residual inputs. Provider region IDs are not FIPS/CBSA
+// codes. Explicit selection remains regional, not a property mapping. Range is ordered and limited
+// to600 monthly periods.
+//
+// HTTP: GET /api/v1/market/zillow/timeseries
+func (s *MarketService) ZillowTimeseries(ctx context.Context, params *MarketZillowTimeseriesParams, opts ...RequestOption) (*MarketZillowTimeseriesResponse, error) {
+	var out MarketZillowTimeseriesResponse
+	if err := s.client.do(ctx, buildMarketZillowTimeseriesRequest(params), opts, decodeJSON(&out)); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func buildMarketZillowTimeseriesRequest(params *MarketZillowTimeseriesParams) *apiRequest {
+	req := newRequest("GET", "/api/v1/market/zillow/timeseries")
+	if params != nil {
+		addQuery(req.query, "dataset_key", params.DatasetKey)
+		addQuery(req.query, "region_id", params.RegionID)
+		addQuery(req.query, "start_period", params.StartPeriod)
+		addQuery(req.query, "end_period", params.EndPeriod)
+		addQuery(req.query, "as_of", params.AsOf)
+		addQuery(req.query, "use", params.Use)
+	}
+	return req
+}
+
+// MarketZillowTimeseriesParams holds the query, header and JSON-body parameters of
+// [MarketService.ZillowTimeseries]. Pass nil when you need none.
+type MarketZillowTimeseriesParams struct {
+	// Exact enabled dataset registry key (for example zori_metro_monthly); unknown keys rejected.
+	//
+	// Required.
+	DatasetKey *string `query:"dataset_key" json:"-"`
+
+	// Explicit Zillow provider region identifier.
+	//
+	// Required.
+	RegionID *string `query:"region_id" json:"-"`
+
+	// Inclusive first calendar month.
+	//
+	// Required.
+	StartPeriod *string `query:"start_period" json:"-"`
+
+	// Inclusive final calendar month; at most599 months after start.
+	//
+	// Required.
+	EndPeriod *string `query:"end_period" json:"-"`
+
+	// Optional explicit-offset timestamp for the accepted source vintage known at that time.
+	// Future/invalid times rejected; unavailable historical vintages are not reconstructed from
+	// current data.
+	AsOf *string `query:"as_of" json:"-"`
+
+	// Requested use; checked against current source rights. Agent use is not an external send.
+	Use *MarketZillowTimeseriesParamsUse `query:"use" json:"-"`
+}
+
+// MarketZillowTimeseriesParamsUse is generated from the OpenAPI spec. It is a string; the
+// MarketZillowTimeseriesParamsUse* constants list the documented values.
+type MarketZillowTimeseriesParamsUse = string
+
+// Documented values of MarketZillowTimeseriesParamsUse.
+const (
+	MarketZillowTimeseriesParamsUseDisplay MarketZillowTimeseriesParamsUse = "display"
+	MarketZillowTimeseriesParamsUseAgent   MarketZillowTimeseriesParamsUse = "agent"
+	MarketZillowTimeseriesParamsUseExport  MarketZillowTimeseriesParamsUse = "export"
+)
+
+// MarketZillowTimeseriesResponse: Get one provider region monthly series
+type MarketZillowTimeseriesResponse = ZillowMetric
+
+// CompareZillowMarkets: Compare explicit provider regions at one common period
+//
+// Requires API-key or first-party session authentication and a current account in the default-off
+// server cohort. Valid current membership does not require a new paid subscription. Existing API
+// quotas still apply. Responses are private, no-store. Unknown and repeated query parameters are
+// rejected. This contract does not indicate source activation, deployment or an SDK release.
+// Use-specific, unexpired reviewed Zillow rights are checked before parcel resolution or
+// repository/cache access. Denied/unknown rights return explicit unavailable metric values, not
+// substitute data. Each metric exposes actual regional geography/variant and freshness; regional
+// values do not become parcel estimates or residual inputs. Up to five distinct region IDs use one
+// dataset/accepted snapshot and common month. First ID is the reference. Value gaps retain a
+// missing reason; incompatible regions are not converted to comparable parcel data. Alternatively
+// provide parcel_id, metric and period (optional window_months) instead of dataset_key and
+// region_ids. Property geography is resolved only by the server. County/metro/national comparisons
+// require compatible metric definitions, units and variants, one requested month and an explicit
+// captured acceptance cutoff. Each dataset retains its own snapshot provenance. Missing mappings,
+// permissions and variants remain unavailable; mixed query forms are rejected.
+//
+// HTTP: GET /api/v1/market/zillow/compare
+func (s *MarketService) CompareZillowMarkets(ctx context.Context, params *MarketCompareZillowMarketsParams, opts ...RequestOption) (*MarketCompareZillowMarketsResponse, error) {
+	var out MarketCompareZillowMarketsResponse
+	if err := s.client.do(ctx, buildMarketCompareZillowMarketsRequest(params), opts, decodeJSON(&out)); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func buildMarketCompareZillowMarketsRequest(params *MarketCompareZillowMarketsParams) *apiRequest {
+	req := newRequest("GET", "/api/v1/market/zillow/compare")
+	if params != nil {
+		addQuery(req.query, "dataset_key", params.DatasetKey)
+		addQuery(req.query, "region_ids", params.RegionIDs)
+		addQuery(req.query, "period", params.Period)
+		addQuery(req.query, "as_of", params.AsOf)
+		addQuery(req.query, "use", params.Use)
+		addQuery(req.query, "parcel_id", params.ParcelID)
+		addQuery(req.query, "metric", params.Metric)
+		addQuery(req.query, "window_months", params.WindowMonths)
+	}
+	return req
+}
+
+// MarketCompareZillowMarketsParams holds the query, header and JSON-body parameters of
+// [MarketService.CompareZillowMarkets]. Pass nil when you need none.
+type MarketCompareZillowMarketsParams struct {
+	// Exact enabled dataset registry key (for example zori_metro_monthly); unknown keys rejected.
+	DatasetKey *string `query:"dataset_key" json:"-"`
+
+	// One to five comma-separated distinct provider IDs; first is reference.
+	RegionIDs *string `query:"region_ids" json:"-"`
+
+	// Common monthly reference period.
+	//
+	// Required.
+	Period *string `query:"period" json:"-"`
+
+	// Optional explicit-offset timestamp for the accepted source vintage known at that time.
+	// Future/invalid times rejected; unavailable historical vintages are not reconstructed from
+	// current data.
+	AsOf *string `query:"as_of" json:"-"`
+
+	// Requested use; checked against current source rights. Agent use is not an external send.
+	Use          *MarketCompareZillowMarketsParamsUse          `query:"use" json:"-"`
+	ParcelID     *IntelligenceParcelID                         `query:"parcel_id" json:"-"`
+	Metric       *MarketCompareZillowMarketsParamsMetric       `query:"metric" json:"-"`
+	WindowMonths *MarketCompareZillowMarketsParamsWindowMonths `query:"window_months" json:"-"`
+}
+
+// MarketCompareZillowMarketsParamsUse is generated from the OpenAPI spec. It is a string; the
+// MarketCompareZillowMarketsParamsUse* constants list the documented values.
+type MarketCompareZillowMarketsParamsUse = string
+
+// Documented values of MarketCompareZillowMarketsParamsUse.
+const (
+	MarketCompareZillowMarketsParamsUseDisplay MarketCompareZillowMarketsParamsUse = "display"
+	MarketCompareZillowMarketsParamsUseAgent   MarketCompareZillowMarketsParamsUse = "agent"
+	MarketCompareZillowMarketsParamsUseExport  MarketCompareZillowMarketsParamsUse = "export"
+)
+
+// MarketCompareZillowMarketsParamsMetric is generated from the OpenAPI spec. It is a string; the
+// MarketCompareZillowMarketsParamsMetric* constants list the documented values.
+type MarketCompareZillowMarketsParamsMetric = string
+
+// Documented values of MarketCompareZillowMarketsParamsMetric.
+const (
+	MarketCompareZillowMarketsParamsMetricZori                MarketCompareZillowMarketsParamsMetric = "zori"
+	MarketCompareZillowMarketsParamsMetricZhvi                MarketCompareZillowMarketsParamsMetric = "zhvi"
+	MarketCompareZillowMarketsParamsMetricInventory           MarketCompareZillowMarketsParamsMetric = "inventory"
+	MarketCompareZillowMarketsParamsMetricPriceCutShare       MarketCompareZillowMarketsParamsMetric = "price_cut_share"
+	MarketCompareZillowMarketsParamsMetricMedianDaysToPending MarketCompareZillowMarketsParamsMetric = "median_days_to_pending"
+)
+
+// MarketCompareZillowMarketsParamsWindowMonths is generated from the OpenAPI spec. It is a string;
+// the MarketCompareZillowMarketsParamsWindowMonths* constants list the documented values.
+type MarketCompareZillowMarketsParamsWindowMonths = string
+
+// Documented values of MarketCompareZillowMarketsParamsWindowMonths.
+const (
+	MarketCompareZillowMarketsParamsWindowMonthsV12 MarketCompareZillowMarketsParamsWindowMonths = "12"
+	MarketCompareZillowMarketsParamsWindowMonthsV36 MarketCompareZillowMarketsParamsWindowMonths = "36"
+	MarketCompareZillowMarketsParamsWindowMonthsV60 MarketCompareZillowMarketsParamsWindowMonths = "60"
+)
+
+// MarketCompareZillowMarketsResponse: Compare explicit provider regions at one common period
+type MarketCompareZillowMarketsResponse = ZillowComparisonResponse

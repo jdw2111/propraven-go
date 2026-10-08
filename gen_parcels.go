@@ -733,6 +733,39 @@ type ParcelsRisksParams struct {
 // ParcelsRisksResponse: Get parcel risk assessment
 type ParcelsRisksResponse = RiskAssessment
 
+// TaxStatus: Property-tax delinquency status of a parcel
+//
+// Whether the parcel is on a treasurer's or tax collector's published property-tax delinquency,
+// lien-sale or tax-sale list (pilot jurisdictions), with each record's status, amount (and what
+// the amount is), tax years, sale, publisher, dates and the list's scope. ACCOUNT REQUIRED (people
+// data, gated like the owner card): a caller with no account gets 401 `code: account_required` and
+// nothing else. A response that serves records counts as one lookup against the account's monthly
+// cap (included on paid plans) and is written to the people-data access log; at the cap the
+// records are withheld with `people_fields.code: lookup_cap_reached` (nothing charged). Before the
+// layer's first load `status` is `unavailable`.
+//
+// HTTP: GET /api/v1/parcels/{id}/tax-status
+func (s *ParcelsService) TaxStatus(ctx context.Context, id string, params *ParcelsTaxStatusParams, opts ...RequestOption) (*ParcelsTaxStatusResponse, error) {
+	var out ParcelsTaxStatusResponse
+	if err := s.client.do(ctx, buildParcelsTaxStatusRequest(id, params), opts, decodeJSON(&out)); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func buildParcelsTaxStatusRequest(id string, params *ParcelsTaxStatusParams) *apiRequest {
+	req := newRequest("GET", "/api/v1/parcels/"+pathParam(id)+"/tax-status")
+	return req
+}
+
+// ParcelsTaxStatusParams holds the query, header and JSON-body parameters of
+// [ParcelsService.TaxStatus]. Pass nil when you need none.
+type ParcelsTaxStatusParams struct {
+}
+
+// ParcelsTaxStatusResponse: Property-tax delinquency status of a parcel
+type ParcelsTaxStatusResponse = ParcelTaxStatus
+
 // Geojson: Parcel polygons as GeoJSON for a bounding box
 //
 // Returns parcel polygons inside a bounding box as a GeoJSON FeatureCollection. Only served at
@@ -1598,7 +1631,9 @@ type ParcelsCompsResponseProvenanceGateScope struct {
 // Occupants: Business occupants of a parcel
 //
 // Businesses matched to the parcel (names, brands, categories, match confidence), primary occupant
-// first. At most 100 rows; `truncated` says when more exist.
+// first. At most 100 rows; `truncated` says when more exist. For an account, `licensees` adds the
+// licensed businesses the state licensing boards place at the parcel (firms, or individuals at a
+// publisher-labelled business address; match confidence >= 0.80; never a residential parcel).
 //
 // HTTP: GET /api/v1/parcels/{id}/occupants
 func (s *ParcelsService) Occupants(ctx context.Context, id string, params *ParcelsOccupantsParams, opts ...RequestOption) (*ParcelsOccupantsResponse, error) {
@@ -1625,6 +1660,12 @@ type ParcelsOccupantsResponse struct {
 	OccupantCount int64                               `json:"occupant_count"`
 	Occupants     []ParcelsOccupantsResponseOccupants `json:"occupants"`
 	Truncated     bool                                `json:"truncated"`
+
+	// Licensed businesses the issuing state boards place at this parcel (FL, CA, NY, CT, VA). Present
+	// for an account only; a person-shaped row (a licensed individual or a sole proprietorship) is
+	// people data and each response serving one is logged. `status: unavailable` means the layer could
+	// not be read, never 'none here'.
+	Licensees *ParcelsOccupantsResponseLicensees `json:"licensees,omitempty"`
 }
 
 // UnmarshalJSON decodes ParcelsOccupantsResponse, accepting numeric fields sent as JSON numbers or as
@@ -1682,6 +1723,142 @@ func (r *ParcelsOccupantsResponseOccupants) UnmarshalJSON(data []byte) error {
 	aux.OccupantLon.assignPtr(&r.OccupantLon)
 	return softTypeError(err)
 }
+
+// ParcelsOccupantsResponseLicensees: Licensed businesses the issuing state boards place at this
+// parcel (FL, CA, NY, CT, VA). Present for an account only; a person-shaped row (a licensed
+// individual or a sole proprietorship) is people data and each response serving one is logged.
+// `status: unavailable` means the layer could not be read, never 'none here'.
+type ParcelsOccupantsResponseLicensees struct {
+	Status    ParcelsOccupantsResponseLicenseesStatus `json:"status"`
+	Count     int64                                   `json:"count"`
+	Truncated bool                                    `json:"truncated"`
+	AsOf      *string                                 `json:"as_of,omitempty"`
+	Rows      []ParcelsOccupantsResponseLicenseesRows `json:"rows"`
+	Note      string                                  `json:"note"`
+
+	// Present when person-shaped licensee fields were withheld from this caller (null values, keys
+	// kept).
+	PeopleFields map[string]any `json:"people_fields,omitempty"`
+}
+
+// UnmarshalJSON decodes ParcelsOccupantsResponseLicensees, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ParcelsOccupantsResponseLicensees) UnmarshalJSON(data []byte) error {
+	type plain ParcelsOccupantsResponseLicensees
+	aux := struct {
+		*plain
+		Count lenientNumber[int64] `json:"count"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Count.assign(&r.Count)
+	return softTypeError(err)
+}
+
+// ParcelsOccupantsResponseLicenseesStatus is generated from the OpenAPI spec. It is a string; the
+// ParcelsOccupantsResponseLicenseesStatus* constants list the documented values.
+type ParcelsOccupantsResponseLicenseesStatus = string
+
+// Documented values of ParcelsOccupantsResponseLicenseesStatus.
+const (
+	ParcelsOccupantsResponseLicenseesStatusServed      ParcelsOccupantsResponseLicenseesStatus = "served"
+	ParcelsOccupantsResponseLicenseesStatusUnavailable ParcelsOccupantsResponseLicenseesStatus = "unavailable"
+)
+
+// ParcelsOccupantsResponseLicenseesRows is generated from the OpenAPI spec.
+type ParcelsOccupantsResponseLicenseesRows struct {
+	LicenseUid      *string                                          `json:"license_uid,omitempty"`
+	SourceID        *string                                          `json:"source_id,omitempty"`
+	IssuerName      *string                                          `json:"issuer_name,omitempty"`
+	Profession      *ParcelsOccupantsResponseLicenseesRowsProfession `json:"profession,omitempty"`
+	LicenseClass    *string                                          `json:"license_class,omitempty"`
+	LicenseNumber   *string                                          `json:"license_number,omitempty"`
+	Status          *ParcelsOccupantsResponseLicenseesRowsStatus     `json:"status,omitempty"`
+	StatusRaw       *string                                          `json:"status_raw,omitempty"`
+	PartyType       *ParcelsOccupantsResponseLicenseesRowsPartyType  `json:"party_type,omitempty"`
+	PersonShaped    *bool                                            `json:"person_shaped,omitempty"`
+	DisplayName     *string                                          `json:"display_name,omitempty"`
+	Dba             *string                                          `json:"dba,omitempty"`
+	FirmName        *string                                          `json:"firm_name,omitempty"`
+	FirmLicenseUid  *string                                          `json:"firm_license_uid,omitempty"`
+	AddrType        *ParcelsOccupantsResponseLicenseesRowsAddrType   `json:"addr_type,omitempty"`
+	AddressLine     *string                                          `json:"address_line,omitempty"`
+	Unit            *string                                          `json:"unit,omitempty"`
+	City            *string                                          `json:"city,omitempty"`
+	State           *string                                          `json:"state,omitempty"`
+	Zip5            *string                                          `json:"zip5,omitempty"`
+	Email           *string                                          `json:"email,omitempty"`
+	Phone           *string                                          `json:"phone,omitempty"`
+	MatchMethod     *string                                          `json:"match_method,omitempty"`
+	MatchConfidence *float64                                         `json:"match_confidence,omitempty"`
+	OperatesBasis   *string                                          `json:"operates_basis,omitempty"`
+	ParcelLuClass   *string                                          `json:"parcel_lu_class,omitempty"`
+	FirstSeen       *string                                          `json:"first_seen,omitempty"`
+	LastSeen        *string                                          `json:"last_seen,omitempty"`
+	AsOf            *string                                          `json:"as_of,omitempty"`
+}
+
+// UnmarshalJSON decodes ParcelsOccupantsResponseLicenseesRows, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ParcelsOccupantsResponseLicenseesRows) UnmarshalJSON(data []byte) error {
+	type plain ParcelsOccupantsResponseLicenseesRows
+	aux := struct {
+		*plain
+		MatchConfidence lenientNumber[float64] `json:"match_confidence"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.MatchConfidence.assignPtr(&r.MatchConfidence)
+	return softTypeError(err)
+}
+
+// ParcelsOccupantsResponseLicenseesRowsProfession is generated from the OpenAPI spec. It is a
+// string; the ParcelsOccupantsResponseLicenseesRowsProfession* constants list the documented
+// values.
+type ParcelsOccupantsResponseLicenseesRowsProfession = string
+
+// Documented values of ParcelsOccupantsResponseLicenseesRowsProfession.
+const (
+	ParcelsOccupantsResponseLicenseesRowsProfessionRealEstate ParcelsOccupantsResponseLicenseesRowsProfession = "real_estate"
+	ParcelsOccupantsResponseLicenseesRowsProfessionInsurance  ParcelsOccupantsResponseLicenseesRowsProfession = "insurance"
+	ParcelsOccupantsResponseLicenseesRowsProfessionCpa        ParcelsOccupantsResponseLicenseesRowsProfession = "cpa"
+	ParcelsOccupantsResponseLicenseesRowsProfessionCam        ParcelsOccupantsResponseLicenseesRowsProfession = "cam"
+)
+
+// ParcelsOccupantsResponseLicenseesRowsStatus is generated from the OpenAPI spec. It is a string;
+// the ParcelsOccupantsResponseLicenseesRowsStatus* constants list the documented values.
+type ParcelsOccupantsResponseLicenseesRowsStatus = string
+
+// Documented values of ParcelsOccupantsResponseLicenseesRowsStatus.
+const (
+	ParcelsOccupantsResponseLicenseesRowsStatusActive     ParcelsOccupantsResponseLicenseesRowsStatus = "active"
+	ParcelsOccupantsResponseLicenseesRowsStatusInactive   ParcelsOccupantsResponseLicenseesRowsStatus = "inactive"
+	ParcelsOccupantsResponseLicenseesRowsStatusDelinquent ParcelsOccupantsResponseLicenseesRowsStatus = "delinquent"
+	ParcelsOccupantsResponseLicenseesRowsStatusVoid       ParcelsOccupantsResponseLicenseesRowsStatus = "void"
+	ParcelsOccupantsResponseLicenseesRowsStatusExpired    ParcelsOccupantsResponseLicenseesRowsStatus = "expired"
+	ParcelsOccupantsResponseLicenseesRowsStatusOther      ParcelsOccupantsResponseLicenseesRowsStatus = "other"
+)
+
+// ParcelsOccupantsResponseLicenseesRowsPartyType is generated from the OpenAPI spec. It is a
+// string; the ParcelsOccupantsResponseLicenseesRowsPartyType* constants list the documented
+// values.
+type ParcelsOccupantsResponseLicenseesRowsPartyType = string
+
+// Documented values of ParcelsOccupantsResponseLicenseesRowsPartyType.
+const (
+	ParcelsOccupantsResponseLicenseesRowsPartyTypeFirm   ParcelsOccupantsResponseLicenseesRowsPartyType = "firm"
+	ParcelsOccupantsResponseLicenseesRowsPartyTypeBranch ParcelsOccupantsResponseLicenseesRowsPartyType = "branch"
+	ParcelsOccupantsResponseLicenseesRowsPartyTypePerson ParcelsOccupantsResponseLicenseesRowsPartyType = "person"
+)
+
+// ParcelsOccupantsResponseLicenseesRowsAddrType is generated from the OpenAPI spec. It is a
+// string; the ParcelsOccupantsResponseLicenseesRowsAddrType* constants list the documented values.
+type ParcelsOccupantsResponseLicenseesRowsAddrType = string
+
+// Documented values of ParcelsOccupantsResponseLicenseesRowsAddrType.
+const (
+	ParcelsOccupantsResponseLicenseesRowsAddrTypeBusiness        ParcelsOccupantsResponseLicenseesRowsAddrType = "business"
+	ParcelsOccupantsResponseLicenseesRowsAddrTypeMailing         ParcelsOccupantsResponseLicenseesRowsAddrType = "mailing"
+	ParcelsOccupantsResponseLicenseesRowsAddrTypeAddressOfRecord ParcelsOccupantsResponseLicenseesRowsAddrType = "address_of_record"
+)
 
 // Violations: Code violations on a parcel
 //

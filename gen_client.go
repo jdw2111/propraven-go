@@ -21,8 +21,12 @@ type Client struct {
 	Deals *DealsService
 	// Freshness holds the freshness operations.
 	Freshness *FreshnessService
+	// Intelligence holds the intelligence operations.
+	Intelligence *IntelligenceService
 	// Leads holds the leads operations.
 	Leads *LeadsService
+	// Licensees holds the licensees operations.
+	Licensees *LicenseesService
 	// Lookup holds the lookup operations.
 	Lookup *LookupService
 	// Market holds the market operations.
@@ -56,7 +60,9 @@ func (c *Client) initServices() {
 	c.Crime = &CrimeService{client: c}
 	c.Deals = &DealsService{client: c}
 	c.Freshness = &FreshnessService{client: c}
+	c.Intelligence = &IntelligenceService{client: c}
 	c.Leads = &LeadsService{client: c}
+	c.Licensees = &LicenseesService{client: c}
 	c.Lookup = &LookupService{client: c}
 	c.Market = &MarketService{client: c}
 	c.Owners = &OwnersService{client: c}

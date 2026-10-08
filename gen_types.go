@@ -2276,8 +2276,10 @@ type CountyDetailMarketStats struct {
 	PriceYoyPct     *float64 `json:"price_yoy_pct,omitempty"`
 
 	// Average days on market.
-	AvgDom      *float64 `json:"avg_dom,omitempty"`
-	RefreshedAt *string  `json:"refreshed_at,omitempty"`
+	AvgDom       *float64  `json:"avg_dom,omitempty"`
+	RefreshedAt  *string   `json:"refreshed_at,omitempty"`
+	UnderReview  []*string `json:"under_review,omitempty"`
+	StaleQuarter *bool     `json:"stale_quarter,omitempty"`
 }
 
 // UnmarshalJSON decodes CountyDetailMarketStats, accepting numeric fields sent as JSON numbers or as
@@ -3068,7 +3070,8 @@ type LeadFeedPreview struct {
 
 	// Present only when a known data gap explains an empty result (e.g. the owner-portfolio rollup's
 	// unpopulated state columns). Nothing is charged in that case.
-	CoverageNote *string `json:"coverage_note,omitempty"`
+	CoverageNote         *string               `json:"coverage_note,omitempty"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes LeadFeedPreview, accepting numeric fields sent as JSON numbers or as
@@ -3086,14 +3089,15 @@ func (r *LeadFeedPreview) UnmarshalJSON(data []byte) error {
 
 // LeadFeedPreviewGeo: The resolved request geography and filters.
 type LeadFeedPreviewGeo struct {
-	State      string  `json:"state"`
-	StateFIPS  string  `json:"state_fips"`
-	CountyFIPS *string `json:"county_fips,omitempty"`
-	Zip        *string `json:"zip,omitempty"`
-	ValueMin   *int64  `json:"value_min,omitempty"`
-	ValueMax   *int64  `json:"value_max,omitempty"`
-	MailReady  bool    `json:"mail_ready"`
-	Limit      int64   `json:"limit"`
+	State         string  `json:"state"`
+	StateFIPS     string  `json:"state_fips"`
+	CountyFIPS    *string `json:"county_fips,omitempty"`
+	Zip           *string `json:"zip,omitempty"`
+	ValueMin      *int64  `json:"value_min,omitempty"`
+	ValueMax      *int64  `json:"value_max,omitempty"`
+	MailReady     bool    `json:"mail_ready"`
+	Limit         int64   `json:"limit"`
+	TaxDelinquent *bool   `json:"tax_delinquent,omitempty"`
 }
 
 // UnmarshalJSON decodes LeadFeedPreviewGeo, accepting numeric fields sent as JSON numbers or as
@@ -3111,6 +3115,13 @@ func (r *LeadFeedPreviewGeo) UnmarshalJSON(data []byte) error {
 	aux.ValueMax.assignPtr(&r.ValueMax)
 	aux.Limit.assign(&r.Limit)
 	return softTypeError(err)
+}
+
+// TaxDelinquencyFilter: Present when `tax_delinquent=true` was applied.
+type TaxDelinquencyFilter struct {
+	Applied  bool     `json:"applied"`
+	Statuses []string `json:"statuses"`
+	Note     string   `json:"note"`
 }
 
 // LeadFeed: The delivered lead set (paid), or an honest empty result when nothing matched (count
@@ -3137,7 +3148,8 @@ type LeadFeed struct {
 	PaidVia *LeadFeedPaidVia `json:"paid_via,omitempty"`
 
 	// The delivered, UNMASKED leads.
-	Leads []Lead `json:"leads,omitempty"`
+	Leads                []Lead                `json:"leads,omitempty"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes LeadFeed, accepting numeric fields sent as JSON numbers or as
@@ -3155,14 +3167,15 @@ func (r *LeadFeed) UnmarshalJSON(data []byte) error {
 
 // LeadFeedGeo: The resolved request geography and filters.
 type LeadFeedGeo struct {
-	State      *string `json:"state,omitempty"`
-	StateFIPS  *string `json:"state_fips,omitempty"`
-	CountyFIPS *string `json:"county_fips,omitempty"`
-	Zip        *string `json:"zip,omitempty"`
-	ValueMin   *int64  `json:"value_min,omitempty"`
-	ValueMax   *int64  `json:"value_max,omitempty"`
-	Limit      *int64  `json:"limit,omitempty"`
-	MailReady  *bool   `json:"mail_ready,omitempty"`
+	State         *string `json:"state,omitempty"`
+	StateFIPS     *string `json:"state_fips,omitempty"`
+	CountyFIPS    *string `json:"county_fips,omitempty"`
+	Zip           *string `json:"zip,omitempty"`
+	ValueMin      *int64  `json:"value_min,omitempty"`
+	ValueMax      *int64  `json:"value_max,omitempty"`
+	Limit         *int64  `json:"limit,omitempty"`
+	MailReady     *bool   `json:"mail_ready,omitempty"`
+	TaxDelinquent *bool   `json:"tax_delinquent,omitempty"`
 }
 
 // UnmarshalJSON decodes LeadFeedGeo, accepting numeric fields sent as JSON numbers or as
@@ -3528,3 +3541,2882 @@ type OwnerCardContactOtherAddressesScopeEvidenceProviders struct {
 	ID     string  `json:"id"`
 	Status *string `json:"status,omitempty"`
 }
+
+// TaxDelinquencyRecord: One property-tax delinquency record as the publishing treasurer / tax
+// collector lists it, placed on this parcel by the publisher's own parcel id. Never served past
+// `expires_on`.
+type TaxDelinquencyRecord struct {
+	RecordUid string `json:"record_uid"`
+
+	// ops.sources id (`tax_<st>_<jurisdiction>_<dataset>`).
+	SourceID         string `json:"source_id"`
+	JurisdictionName string `json:"jurisdiction_name"`
+	Publisher        string `json:"publisher"`
+
+	// The parcel id exactly as the publisher prints it.
+	PublisherParcelID string `json:"publisher_parcel_id"`
+
+	// Only in_sale and delinquent count as delinquent.
+	Status    TaxDelinquencyRecordStatus `json:"status"`
+	StatusRaw *string                    `json:"status_raw,omitempty"`
+
+	// Only where the publisher says so; null = not published.
+	PaymentPlan *bool `json:"payment_plan,omitempty"`
+
+	// Only where the publisher says so; null = not published.
+	Bankruptcy      *bool   `json:"bankruptcy,omitempty"`
+	TaxYears        []int64 `json:"tax_years,omitempty"`
+	FirstTaxYear    *int64  `json:"first_tax_year,omitempty"`
+	LastTaxYear     *int64  `json:"last_tax_year,omitempty"`
+	YearsDelinquent *int64  `json:"years_delinquent,omitempty"`
+
+	// Null when the list publishes no amount; what it is is `amount_basis`.
+	AmountDue   *float64 `json:"amount_due,omitempty"`
+	AmountBasis *string  `json:"amount_basis,omitempty"`
+	SaleKind    *string  `json:"sale_kind,omitempty"`
+	SaleDate    *string  `json:"sale_date,omitempty"`
+
+	// The publisher's own date for the list.
+	PublisherAsOf string `json:"publisher_as_of"`
+
+	// When PropRaven pulled the list.
+	AsOf            string                          `json:"as_of"`
+	ExpiresOn       string                          `json:"expires_on"`
+	MatchMethod     TaxDelinquencyRecordMatchMethod `json:"match_method"`
+	MatchConfidence float64                         `json:"match_confidence"`
+	SourceURL       string                          `json:"source_url"`
+}
+
+// UnmarshalJSON decodes TaxDelinquencyRecord, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *TaxDelinquencyRecord) UnmarshalJSON(data []byte) error {
+	type plain TaxDelinquencyRecord
+	aux := struct {
+		*plain
+		TaxYears        lenientSlice[int64]    `json:"tax_years"`
+		FirstTaxYear    lenientNumber[int64]   `json:"first_tax_year"`
+		LastTaxYear     lenientNumber[int64]   `json:"last_tax_year"`
+		YearsDelinquent lenientNumber[int64]   `json:"years_delinquent"`
+		AmountDue       lenientNumber[float64] `json:"amount_due"`
+		MatchConfidence lenientNumber[float64] `json:"match_confidence"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.TaxYears.assign(&r.TaxYears)
+	aux.FirstTaxYear.assignPtr(&r.FirstTaxYear)
+	aux.LastTaxYear.assignPtr(&r.LastTaxYear)
+	aux.YearsDelinquent.assignPtr(&r.YearsDelinquent)
+	aux.AmountDue.assignPtr(&r.AmountDue)
+	aux.MatchConfidence.assign(&r.MatchConfidence)
+	return softTypeError(err)
+}
+
+// TaxDelinquencyRecordStatus: Only in_sale and delinquent count as delinquent.
+//
+// It is a string; the TaxDelinquencyRecordStatus* constants list the documented values.
+type TaxDelinquencyRecordStatus = string
+
+// Documented values of TaxDelinquencyRecordStatus.
+const (
+	TaxDelinquencyRecordStatusInSale     TaxDelinquencyRecordStatus = "in_sale"
+	TaxDelinquencyRecordStatusDelinquent TaxDelinquencyRecordStatus = "delinquent"
+	TaxDelinquencyRecordStatusSold       TaxDelinquencyRecordStatus = "sold"
+	TaxDelinquencyRecordStatusRedeemed   TaxDelinquencyRecordStatus = "redeemed"
+)
+
+// TaxDelinquencyRecordMatchMethod is generated from the OpenAPI spec. It is a string; the
+// TaxDelinquencyRecordMatchMethod* constants list the documented values.
+type TaxDelinquencyRecordMatchMethod = string
+
+// Documented values of TaxDelinquencyRecordMatchMethod.
+const (
+	TaxDelinquencyRecordMatchMethodParcelIDExact      TaxDelinquencyRecordMatchMethod = "parcel_id_exact"
+	TaxDelinquencyRecordMatchMethodParcelIDNormalized TaxDelinquencyRecordMatchMethod = "parcel_id_normalized"
+	TaxDelinquencyRecordMatchMethodAddressExact       TaxDelinquencyRecordMatchMethod = "address_exact"
+)
+
+// TaxDelinquencyCoverage: A delinquency list that covers the parcel's county. `list_scope` says
+// what absence from the list means.
+type TaxDelinquencyCoverage struct {
+	SourceID         string                            `json:"source_id"`
+	JurisdictionName string                            `json:"jurisdiction_name"`
+	Publisher        string                            `json:"publisher"`
+	DatasetKind      TaxDelinquencyCoverageDatasetKind `json:"dataset_kind"`
+	ListScope        string                            `json:"list_scope"`
+	PublisherAsOf    string                            `json:"publisher_as_of"`
+	AsOf             string                            `json:"as_of"`
+	ExpiresOn        string                            `json:"expires_on"`
+	SourceURL        string                            `json:"source_url"`
+}
+
+// TaxDelinquencyCoverageDatasetKind is generated from the OpenAPI spec. It is a string; the
+// TaxDelinquencyCoverageDatasetKind* constants list the documented values.
+type TaxDelinquencyCoverageDatasetKind = string
+
+// Documented values of TaxDelinquencyCoverageDatasetKind.
+const (
+	TaxDelinquencyCoverageDatasetKindDelinquency     TaxDelinquencyCoverageDatasetKind = "delinquency"
+	TaxDelinquencyCoverageDatasetKindLienSaleList    TaxDelinquencyCoverageDatasetKind = "lien_sale_list"
+	TaxDelinquencyCoverageDatasetKindTaxSaleList     TaxDelinquencyCoverageDatasetKind = "tax_sale_list"
+	TaxDelinquencyCoverageDatasetKindScavengerList   TaxDelinquencyCoverageDatasetKind = "scavenger_list"
+	TaxDelinquencyCoverageDatasetKindForeclosureList TaxDelinquencyCoverageDatasetKind = "foreclosure_list"
+)
+
+// ParcelTaxStatus is generated from the OpenAPI spec.
+type ParcelTaxStatus struct {
+	ParcelID string `json:"parcel_id"`
+
+	// listed = on at least one unexpired list; not_listed = an unexpired list covers the county and
+	// this parcel is not on it (read `list_scope`: never proof of payment); not_covered = no list for
+	// the county; unavailable = the layer could not be read.
+	Status   ParcelTaxStatusStatus    `json:"status"`
+	Coverage []TaxDelinquencyCoverage `json:"coverage"`
+
+	// in_sale, delinquent, sold, redeemed, then amount_due descending; at most 50.
+	Records   []TaxDelinquencyRecord `json:"records"`
+	Truncated bool                   `json:"truncated"`
+	Note      string                 `json:"note"`
+
+	// Present when the records were withheld by the lookup meter: `code` lookup_cap_reached or
+	// lookup_meter_unavailable (nothing charged).
+	PeopleFields map[string]any `json:"people_fields,omitempty"`
+}
+
+// ParcelTaxStatusStatus: listed = on at least one unexpired list; not_listed = an unexpired list
+// covers the county and this parcel is not on it (read `list_scope`: never proof of payment);
+// not_covered = no list for the county; unavailable = the layer could not be read.
+//
+// It is a string; the ParcelTaxStatusStatus* constants list the documented values.
+type ParcelTaxStatusStatus = string
+
+// Documented values of ParcelTaxStatusStatus.
+const (
+	ParcelTaxStatusStatusListed      ParcelTaxStatusStatus = "listed"
+	ParcelTaxStatusStatusNotListed   ParcelTaxStatusStatus = "not_listed"
+	ParcelTaxStatusStatusNotCovered  ParcelTaxStatusStatus = "not_covered"
+	ParcelTaxStatusStatusUnavailable ParcelTaxStatusStatus = "unavailable"
+)
+
+// IntelligenceRun: Immutable descriptive calculation run with exact rational wire values.
+// Calculation time is not source freshness. Unknown values/dates remain null.
+type IntelligenceRun struct {
+	ID                string                `json:"id"`
+	CanonicalID       string                `json:"canonical_id"`
+	DefinitionVersion string                `json:"definition_version"`
+	Query             IntelligenceRunQuery  `json:"query"`
+	ComputedAt        string                `json:"computed_at"`
+	EvidenceIDs       []string              `json:"evidence_ids"`
+	Groups            IntelligenceRunGroups `json:"groups"`
+}
+
+// IntelligenceRunQuery is generated from the OpenAPI spec.
+type IntelligenceRunQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceRunGroups is generated from the OpenAPI spec.
+type IntelligenceRunGroups struct {
+	Market        []IntelligenceRunGroupsMarket        `json:"market"`
+	Seller        []IntelligenceRunGroupsSeller        `json:"seller"`
+	Owner         []IntelligenceRunGroupsOwner         `json:"owner"`
+	Redevelopment []IntelligenceRunGroupsRedevelopment `json:"redevelopment"`
+}
+
+// IntelligenceRunGroupsMarket is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarket struct {
+	Definition  string                                             `json:"definition"`
+	Status      IntelligenceRunGroupsMarketStatus                  `json:"status"`
+	Reasons     []string                                           `json:"reasons"`
+	Metrics     map[string]IntelligenceRunGroupsMarketMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                 `json:"counts"`
+	Exclusions  map[string]float64                                 `json:"exclusions"`
+	EvidenceIDs []string                                           `json:"evidence_ids"`
+	Context     IntelligenceRunGroupsMarketContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceRunGroupsMarket, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceRunGroupsMarket) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceRunGroupsMarket
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceRunGroupsMarketStatus is generated from the OpenAPI spec. It is a string; the
+// IntelligenceRunGroupsMarketStatus* constants list the documented values.
+type IntelligenceRunGroupsMarketStatus = string
+
+// Documented values of IntelligenceRunGroupsMarketStatus.
+const (
+	IntelligenceRunGroupsMarketStatusAvailable        IntelligenceRunGroupsMarketStatus = "available"
+	IntelligenceRunGroupsMarketStatusPartial          IntelligenceRunGroupsMarketStatus = "partial"
+	IntelligenceRunGroupsMarketStatusInsufficientData IntelligenceRunGroupsMarketStatus = "insufficient_data"
+	IntelligenceRunGroupsMarketStatusUnavailable      IntelligenceRunGroupsMarketStatus = "unavailable"
+	IntelligenceRunGroupsMarketStatusStale            IntelligenceRunGroupsMarketStatus = "stale"
+	IntelligenceRunGroupsMarketStatusError            IntelligenceRunGroupsMarketStatus = "error"
+)
+
+// IntelligenceRunGroupsMarketMetricsValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketMetricsValue struct {
+	Value *IntelligenceRunGroupsMarketMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                        `json:"unit"`
+}
+
+// IntelligenceRunGroupsMarketMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceRunGroupsMarketContext is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketContext struct {
+	InputKind           IntelligenceRunGroupsMarketContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceRunGroupsMarketContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceRunGroupsMarketContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceRunGroupsMarketContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                   `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                        `json:"metric_periods"`
+	LatestObservationAt *string                                           `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                           `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                           `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                             `json:"history_complete,omitempty"`
+}
+
+// IntelligenceRunGroupsMarketContextInputKind is generated from the OpenAPI spec. It is a string;
+// the IntelligenceRunGroupsMarketContextInputKind* constants list the documented values.
+type IntelligenceRunGroupsMarketContextInputKind = string
+
+// Documented values of IntelligenceRunGroupsMarketContextInputKind.
+const (
+	IntelligenceRunGroupsMarketContextInputKindObserved        IntelligenceRunGroupsMarketContextInputKind = "observed"
+	IntelligenceRunGroupsMarketContextInputKindUserAssumptions IntelligenceRunGroupsMarketContextInputKind = "user_assumptions"
+	IntelligenceRunGroupsMarketContextInputKindUnavailable     IntelligenceRunGroupsMarketContextInputKind = "unavailable"
+)
+
+// IntelligenceRunGroupsMarketContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsMarketContextActualScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsMarketContextQuery is generated from the OpenAPI spec.
+type IntelligenceRunGroupsMarketContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceRunGroupsSeller is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSeller struct {
+	Definition  string                                             `json:"definition"`
+	Status      IntelligenceRunGroupsSellerStatus                  `json:"status"`
+	Reasons     []string                                           `json:"reasons"`
+	Metrics     map[string]IntelligenceRunGroupsSellerMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                 `json:"counts"`
+	Exclusions  map[string]float64                                 `json:"exclusions"`
+	EvidenceIDs []string                                           `json:"evidence_ids"`
+	Context     IntelligenceRunGroupsSellerContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceRunGroupsSeller, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceRunGroupsSeller) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceRunGroupsSeller
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceRunGroupsSellerStatus is generated from the OpenAPI spec. It is a string; the
+// IntelligenceRunGroupsSellerStatus* constants list the documented values.
+type IntelligenceRunGroupsSellerStatus = string
+
+// Documented values of IntelligenceRunGroupsSellerStatus.
+const (
+	IntelligenceRunGroupsSellerStatusAvailable        IntelligenceRunGroupsSellerStatus = "available"
+	IntelligenceRunGroupsSellerStatusPartial          IntelligenceRunGroupsSellerStatus = "partial"
+	IntelligenceRunGroupsSellerStatusInsufficientData IntelligenceRunGroupsSellerStatus = "insufficient_data"
+	IntelligenceRunGroupsSellerStatusUnavailable      IntelligenceRunGroupsSellerStatus = "unavailable"
+	IntelligenceRunGroupsSellerStatusStale            IntelligenceRunGroupsSellerStatus = "stale"
+	IntelligenceRunGroupsSellerStatusError            IntelligenceRunGroupsSellerStatus = "error"
+)
+
+// IntelligenceRunGroupsSellerMetricsValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerMetricsValue struct {
+	Value *IntelligenceRunGroupsSellerMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                        `json:"unit"`
+}
+
+// IntelligenceRunGroupsSellerMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceRunGroupsSellerContext is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerContext struct {
+	InputKind           IntelligenceRunGroupsSellerContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceRunGroupsSellerContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceRunGroupsSellerContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceRunGroupsSellerContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                   `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                        `json:"metric_periods"`
+	LatestObservationAt *string                                           `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                           `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                           `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                             `json:"history_complete,omitempty"`
+}
+
+// IntelligenceRunGroupsSellerContextInputKind is generated from the OpenAPI spec. It is a string;
+// the IntelligenceRunGroupsSellerContextInputKind* constants list the documented values.
+type IntelligenceRunGroupsSellerContextInputKind = string
+
+// Documented values of IntelligenceRunGroupsSellerContextInputKind.
+const (
+	IntelligenceRunGroupsSellerContextInputKindObserved        IntelligenceRunGroupsSellerContextInputKind = "observed"
+	IntelligenceRunGroupsSellerContextInputKindUserAssumptions IntelligenceRunGroupsSellerContextInputKind = "user_assumptions"
+	IntelligenceRunGroupsSellerContextInputKindUnavailable     IntelligenceRunGroupsSellerContextInputKind = "unavailable"
+)
+
+// IntelligenceRunGroupsSellerContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsSellerContextActualScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsSellerContextQuery is generated from the OpenAPI spec.
+type IntelligenceRunGroupsSellerContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceRunGroupsOwner is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwner struct {
+	Definition  string                                            `json:"definition"`
+	Status      IntelligenceRunGroupsOwnerStatus                  `json:"status"`
+	Reasons     []string                                          `json:"reasons"`
+	Metrics     map[string]IntelligenceRunGroupsOwnerMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                `json:"counts"`
+	Exclusions  map[string]float64                                `json:"exclusions"`
+	EvidenceIDs []string                                          `json:"evidence_ids"`
+	Context     IntelligenceRunGroupsOwnerContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceRunGroupsOwner, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceRunGroupsOwner) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceRunGroupsOwner
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceRunGroupsOwnerStatus is generated from the OpenAPI spec. It is a string; the
+// IntelligenceRunGroupsOwnerStatus* constants list the documented values.
+type IntelligenceRunGroupsOwnerStatus = string
+
+// Documented values of IntelligenceRunGroupsOwnerStatus.
+const (
+	IntelligenceRunGroupsOwnerStatusAvailable        IntelligenceRunGroupsOwnerStatus = "available"
+	IntelligenceRunGroupsOwnerStatusPartial          IntelligenceRunGroupsOwnerStatus = "partial"
+	IntelligenceRunGroupsOwnerStatusInsufficientData IntelligenceRunGroupsOwnerStatus = "insufficient_data"
+	IntelligenceRunGroupsOwnerStatusUnavailable      IntelligenceRunGroupsOwnerStatus = "unavailable"
+	IntelligenceRunGroupsOwnerStatusStale            IntelligenceRunGroupsOwnerStatus = "stale"
+	IntelligenceRunGroupsOwnerStatusError            IntelligenceRunGroupsOwnerStatus = "error"
+)
+
+// IntelligenceRunGroupsOwnerMetricsValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerMetricsValue struct {
+	Value *IntelligenceRunGroupsOwnerMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                       `json:"unit"`
+}
+
+// IntelligenceRunGroupsOwnerMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceRunGroupsOwnerContext is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerContext struct {
+	InputKind           IntelligenceRunGroupsOwnerContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceRunGroupsOwnerContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceRunGroupsOwnerContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceRunGroupsOwnerContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                  `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                       `json:"metric_periods"`
+	LatestObservationAt *string                                          `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                          `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                          `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                            `json:"history_complete,omitempty"`
+}
+
+// IntelligenceRunGroupsOwnerContextInputKind is generated from the OpenAPI spec. It is a string;
+// the IntelligenceRunGroupsOwnerContextInputKind* constants list the documented values.
+type IntelligenceRunGroupsOwnerContextInputKind = string
+
+// Documented values of IntelligenceRunGroupsOwnerContextInputKind.
+const (
+	IntelligenceRunGroupsOwnerContextInputKindObserved        IntelligenceRunGroupsOwnerContextInputKind = "observed"
+	IntelligenceRunGroupsOwnerContextInputKindUserAssumptions IntelligenceRunGroupsOwnerContextInputKind = "user_assumptions"
+	IntelligenceRunGroupsOwnerContextInputKindUnavailable     IntelligenceRunGroupsOwnerContextInputKind = "unavailable"
+)
+
+// IntelligenceRunGroupsOwnerContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsOwnerContextActualScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsOwnerContextQuery is generated from the OpenAPI spec.
+type IntelligenceRunGroupsOwnerContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceRunGroupsRedevelopment is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopment struct {
+	Definition  string                                                    `json:"definition"`
+	Status      IntelligenceRunGroupsRedevelopmentStatus                  `json:"status"`
+	Reasons     []string                                                  `json:"reasons"`
+	Metrics     map[string]IntelligenceRunGroupsRedevelopmentMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                        `json:"counts"`
+	Exclusions  map[string]float64                                        `json:"exclusions"`
+	EvidenceIDs []string                                                  `json:"evidence_ids"`
+	Context     IntelligenceRunGroupsRedevelopmentContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceRunGroupsRedevelopment, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceRunGroupsRedevelopment) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceRunGroupsRedevelopment
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceRunGroupsRedevelopmentStatus is generated from the OpenAPI spec. It is a string; the
+// IntelligenceRunGroupsRedevelopmentStatus* constants list the documented values.
+type IntelligenceRunGroupsRedevelopmentStatus = string
+
+// Documented values of IntelligenceRunGroupsRedevelopmentStatus.
+const (
+	IntelligenceRunGroupsRedevelopmentStatusAvailable        IntelligenceRunGroupsRedevelopmentStatus = "available"
+	IntelligenceRunGroupsRedevelopmentStatusPartial          IntelligenceRunGroupsRedevelopmentStatus = "partial"
+	IntelligenceRunGroupsRedevelopmentStatusInsufficientData IntelligenceRunGroupsRedevelopmentStatus = "insufficient_data"
+	IntelligenceRunGroupsRedevelopmentStatusUnavailable      IntelligenceRunGroupsRedevelopmentStatus = "unavailable"
+	IntelligenceRunGroupsRedevelopmentStatusStale            IntelligenceRunGroupsRedevelopmentStatus = "stale"
+	IntelligenceRunGroupsRedevelopmentStatusError            IntelligenceRunGroupsRedevelopmentStatus = "error"
+)
+
+// IntelligenceRunGroupsRedevelopmentMetricsValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentMetricsValue struct {
+	Value *IntelligenceRunGroupsRedevelopmentMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                               `json:"unit"`
+}
+
+// IntelligenceRunGroupsRedevelopmentMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceRunGroupsRedevelopmentContext is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentContext struct {
+	InputKind           IntelligenceRunGroupsRedevelopmentContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceRunGroupsRedevelopmentContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceRunGroupsRedevelopmentContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceRunGroupsRedevelopmentContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                          `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                               `json:"metric_periods"`
+	LatestObservationAt *string                                                  `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                  `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                  `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                    `json:"history_complete,omitempty"`
+}
+
+// IntelligenceRunGroupsRedevelopmentContextInputKind is generated from the OpenAPI spec. It is a
+// string; the IntelligenceRunGroupsRedevelopmentContextInputKind* constants list the documented
+// values.
+type IntelligenceRunGroupsRedevelopmentContextInputKind = string
+
+// Documented values of IntelligenceRunGroupsRedevelopmentContextInputKind.
+const (
+	IntelligenceRunGroupsRedevelopmentContextInputKindObserved        IntelligenceRunGroupsRedevelopmentContextInputKind = "observed"
+	IntelligenceRunGroupsRedevelopmentContextInputKindUserAssumptions IntelligenceRunGroupsRedevelopmentContextInputKind = "user_assumptions"
+	IntelligenceRunGroupsRedevelopmentContextInputKindUnavailable     IntelligenceRunGroupsRedevelopmentContextInputKind = "unavailable"
+)
+
+// IntelligenceRunGroupsRedevelopmentContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsRedevelopmentContextActualScope is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceRunGroupsRedevelopmentContextQuery is generated from the OpenAPI spec.
+type IntelligenceRunGroupsRedevelopmentContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoff: Authorized retained results and optional user scenario;
+// structured_only_not_sent. No model call, external delivery or duplicate arithmetic.
+type IntelligenceHandoff struct {
+	Version         string                              `json:"version"`
+	CanonicalID     string                              `json:"canonical_id"`
+	RunID           string                              `json:"run_id"`
+	Query           IntelligenceHandoffQuery            `json:"query"`
+	Observations    []IntelligenceHandoffObservations   `json:"observations"`
+	ComputedResults IntelligenceHandoffComputedResults  `json:"computed_results"`
+	UserAssumptions *IntelligenceHandoffUserAssumptions `json:"user_assumptions,omitempty"`
+	Interpretations []string                            `json:"interpretations"`
+	NextDiligence   []string                            `json:"next_diligence"`
+	Delivery        string                              `json:"delivery"`
+}
+
+// IntelligenceHandoffQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoffObservations is generated from the OpenAPI spec.
+type IntelligenceHandoffObservations struct {
+	EvidenceID         string  `json:"evidence_id"`
+	SourceProduct      string  `json:"source_product"`
+	SourceVersion      string  `json:"source_version"`
+	Vintage            string  `json:"vintage"`
+	SourceAsOf         *string `json:"source_as_of,omitempty"`
+	ObservedAt         *string `json:"observed_at,omitempty"`
+	CapturedAt         string  `json:"captured_at"`
+	KnowledgeBasis     string  `json:"knowledge_basis"`
+	EffectiveTimeBasis string  `json:"effective_time_basis"`
+	SourceURL          *string `json:"source_url,omitempty"`
+}
+
+// IntelligenceHandoffComputedResults is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResults struct {
+	Market        []IntelligenceHandoffComputedResultsMarket        `json:"market"`
+	Seller        []IntelligenceHandoffComputedResultsSeller        `json:"seller"`
+	Owner         []IntelligenceHandoffComputedResultsOwner         `json:"owner"`
+	Redevelopment []IntelligenceHandoffComputedResultsRedevelopment `json:"redevelopment"`
+}
+
+// IntelligenceHandoffComputedResultsMarket is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarket struct {
+	Definition  string                                                          `json:"definition"`
+	Status      IntelligenceHandoffComputedResultsMarketStatus                  `json:"status"`
+	Reasons     []string                                                        `json:"reasons"`
+	Metrics     map[string]IntelligenceHandoffComputedResultsMarketMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                              `json:"counts"`
+	Exclusions  map[string]float64                                              `json:"exclusions"`
+	EvidenceIDs []string                                                        `json:"evidence_ids"`
+	Context     IntelligenceHandoffComputedResultsMarketContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceHandoffComputedResultsMarket, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceHandoffComputedResultsMarket) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceHandoffComputedResultsMarket
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceHandoffComputedResultsMarketStatus is generated from the OpenAPI spec. It is a
+// string; the IntelligenceHandoffComputedResultsMarketStatus* constants list the documented
+// values.
+type IntelligenceHandoffComputedResultsMarketStatus = string
+
+// Documented values of IntelligenceHandoffComputedResultsMarketStatus.
+const (
+	IntelligenceHandoffComputedResultsMarketStatusAvailable        IntelligenceHandoffComputedResultsMarketStatus = "available"
+	IntelligenceHandoffComputedResultsMarketStatusPartial          IntelligenceHandoffComputedResultsMarketStatus = "partial"
+	IntelligenceHandoffComputedResultsMarketStatusInsufficientData IntelligenceHandoffComputedResultsMarketStatus = "insufficient_data"
+	IntelligenceHandoffComputedResultsMarketStatusUnavailable      IntelligenceHandoffComputedResultsMarketStatus = "unavailable"
+	IntelligenceHandoffComputedResultsMarketStatusStale            IntelligenceHandoffComputedResultsMarketStatus = "stale"
+	IntelligenceHandoffComputedResultsMarketStatusError            IntelligenceHandoffComputedResultsMarketStatus = "error"
+)
+
+// IntelligenceHandoffComputedResultsMarketMetricsValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarketMetricsValue struct {
+	Value *IntelligenceHandoffComputedResultsMarketMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                                     `json:"unit"`
+}
+
+// IntelligenceHandoffComputedResultsMarketMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarketMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceHandoffComputedResultsMarketContext is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarketContext struct {
+	InputKind           IntelligenceHandoffComputedResultsMarketContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceHandoffComputedResultsMarketContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceHandoffComputedResultsMarketContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceHandoffComputedResultsMarketContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                                `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                                     `json:"metric_periods"`
+	LatestObservationAt *string                                                        `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                        `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                        `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                          `json:"history_complete,omitempty"`
+}
+
+// IntelligenceHandoffComputedResultsMarketContextInputKind is generated from the OpenAPI spec. It
+// is a string; the IntelligenceHandoffComputedResultsMarketContextInputKind* constants list the
+// documented values.
+type IntelligenceHandoffComputedResultsMarketContextInputKind = string
+
+// Documented values of IntelligenceHandoffComputedResultsMarketContextInputKind.
+const (
+	IntelligenceHandoffComputedResultsMarketContextInputKindObserved        IntelligenceHandoffComputedResultsMarketContextInputKind = "observed"
+	IntelligenceHandoffComputedResultsMarketContextInputKindUserAssumptions IntelligenceHandoffComputedResultsMarketContextInputKind = "user_assumptions"
+	IntelligenceHandoffComputedResultsMarketContextInputKindUnavailable     IntelligenceHandoffComputedResultsMarketContextInputKind = "unavailable"
+)
+
+// IntelligenceHandoffComputedResultsMarketContextRequestedScope is generated from the OpenAPI
+// spec.
+type IntelligenceHandoffComputedResultsMarketContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsMarketContextActualScope is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarketContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsMarketContextQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsMarketContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoffComputedResultsSeller is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSeller struct {
+	Definition  string                                                          `json:"definition"`
+	Status      IntelligenceHandoffComputedResultsSellerStatus                  `json:"status"`
+	Reasons     []string                                                        `json:"reasons"`
+	Metrics     map[string]IntelligenceHandoffComputedResultsSellerMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                              `json:"counts"`
+	Exclusions  map[string]float64                                              `json:"exclusions"`
+	EvidenceIDs []string                                                        `json:"evidence_ids"`
+	Context     IntelligenceHandoffComputedResultsSellerContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceHandoffComputedResultsSeller, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceHandoffComputedResultsSeller) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceHandoffComputedResultsSeller
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceHandoffComputedResultsSellerStatus is generated from the OpenAPI spec. It is a
+// string; the IntelligenceHandoffComputedResultsSellerStatus* constants list the documented
+// values.
+type IntelligenceHandoffComputedResultsSellerStatus = string
+
+// Documented values of IntelligenceHandoffComputedResultsSellerStatus.
+const (
+	IntelligenceHandoffComputedResultsSellerStatusAvailable        IntelligenceHandoffComputedResultsSellerStatus = "available"
+	IntelligenceHandoffComputedResultsSellerStatusPartial          IntelligenceHandoffComputedResultsSellerStatus = "partial"
+	IntelligenceHandoffComputedResultsSellerStatusInsufficientData IntelligenceHandoffComputedResultsSellerStatus = "insufficient_data"
+	IntelligenceHandoffComputedResultsSellerStatusUnavailable      IntelligenceHandoffComputedResultsSellerStatus = "unavailable"
+	IntelligenceHandoffComputedResultsSellerStatusStale            IntelligenceHandoffComputedResultsSellerStatus = "stale"
+	IntelligenceHandoffComputedResultsSellerStatusError            IntelligenceHandoffComputedResultsSellerStatus = "error"
+)
+
+// IntelligenceHandoffComputedResultsSellerMetricsValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSellerMetricsValue struct {
+	Value *IntelligenceHandoffComputedResultsSellerMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                                     `json:"unit"`
+}
+
+// IntelligenceHandoffComputedResultsSellerMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSellerMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceHandoffComputedResultsSellerContext is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSellerContext struct {
+	InputKind           IntelligenceHandoffComputedResultsSellerContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceHandoffComputedResultsSellerContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceHandoffComputedResultsSellerContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceHandoffComputedResultsSellerContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                                `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                                     `json:"metric_periods"`
+	LatestObservationAt *string                                                        `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                        `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                        `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                          `json:"history_complete,omitempty"`
+}
+
+// IntelligenceHandoffComputedResultsSellerContextInputKind is generated from the OpenAPI spec. It
+// is a string; the IntelligenceHandoffComputedResultsSellerContextInputKind* constants list the
+// documented values.
+type IntelligenceHandoffComputedResultsSellerContextInputKind = string
+
+// Documented values of IntelligenceHandoffComputedResultsSellerContextInputKind.
+const (
+	IntelligenceHandoffComputedResultsSellerContextInputKindObserved        IntelligenceHandoffComputedResultsSellerContextInputKind = "observed"
+	IntelligenceHandoffComputedResultsSellerContextInputKindUserAssumptions IntelligenceHandoffComputedResultsSellerContextInputKind = "user_assumptions"
+	IntelligenceHandoffComputedResultsSellerContextInputKindUnavailable     IntelligenceHandoffComputedResultsSellerContextInputKind = "unavailable"
+)
+
+// IntelligenceHandoffComputedResultsSellerContextRequestedScope is generated from the OpenAPI
+// spec.
+type IntelligenceHandoffComputedResultsSellerContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsSellerContextActualScope is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSellerContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsSellerContextQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsSellerContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoffComputedResultsOwner is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwner struct {
+	Definition  string                                                         `json:"definition"`
+	Status      IntelligenceHandoffComputedResultsOwnerStatus                  `json:"status"`
+	Reasons     []string                                                       `json:"reasons"`
+	Metrics     map[string]IntelligenceHandoffComputedResultsOwnerMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                             `json:"counts"`
+	Exclusions  map[string]float64                                             `json:"exclusions"`
+	EvidenceIDs []string                                                       `json:"evidence_ids"`
+	Context     IntelligenceHandoffComputedResultsOwnerContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceHandoffComputedResultsOwner, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceHandoffComputedResultsOwner) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceHandoffComputedResultsOwner
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceHandoffComputedResultsOwnerStatus is generated from the OpenAPI spec. It is a
+// string; the IntelligenceHandoffComputedResultsOwnerStatus* constants list the documented values.
+type IntelligenceHandoffComputedResultsOwnerStatus = string
+
+// Documented values of IntelligenceHandoffComputedResultsOwnerStatus.
+const (
+	IntelligenceHandoffComputedResultsOwnerStatusAvailable        IntelligenceHandoffComputedResultsOwnerStatus = "available"
+	IntelligenceHandoffComputedResultsOwnerStatusPartial          IntelligenceHandoffComputedResultsOwnerStatus = "partial"
+	IntelligenceHandoffComputedResultsOwnerStatusInsufficientData IntelligenceHandoffComputedResultsOwnerStatus = "insufficient_data"
+	IntelligenceHandoffComputedResultsOwnerStatusUnavailable      IntelligenceHandoffComputedResultsOwnerStatus = "unavailable"
+	IntelligenceHandoffComputedResultsOwnerStatusStale            IntelligenceHandoffComputedResultsOwnerStatus = "stale"
+	IntelligenceHandoffComputedResultsOwnerStatusError            IntelligenceHandoffComputedResultsOwnerStatus = "error"
+)
+
+// IntelligenceHandoffComputedResultsOwnerMetricsValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerMetricsValue struct {
+	Value *IntelligenceHandoffComputedResultsOwnerMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                                    `json:"unit"`
+}
+
+// IntelligenceHandoffComputedResultsOwnerMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceHandoffComputedResultsOwnerContext is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerContext struct {
+	InputKind           IntelligenceHandoffComputedResultsOwnerContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceHandoffComputedResultsOwnerContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceHandoffComputedResultsOwnerContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceHandoffComputedResultsOwnerContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                               `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                                    `json:"metric_periods"`
+	LatestObservationAt *string                                                       `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                       `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                       `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                         `json:"history_complete,omitempty"`
+}
+
+// IntelligenceHandoffComputedResultsOwnerContextInputKind is generated from the OpenAPI spec. It
+// is a string; the IntelligenceHandoffComputedResultsOwnerContextInputKind* constants list the
+// documented values.
+type IntelligenceHandoffComputedResultsOwnerContextInputKind = string
+
+// Documented values of IntelligenceHandoffComputedResultsOwnerContextInputKind.
+const (
+	IntelligenceHandoffComputedResultsOwnerContextInputKindObserved        IntelligenceHandoffComputedResultsOwnerContextInputKind = "observed"
+	IntelligenceHandoffComputedResultsOwnerContextInputKindUserAssumptions IntelligenceHandoffComputedResultsOwnerContextInputKind = "user_assumptions"
+	IntelligenceHandoffComputedResultsOwnerContextInputKindUnavailable     IntelligenceHandoffComputedResultsOwnerContextInputKind = "unavailable"
+)
+
+// IntelligenceHandoffComputedResultsOwnerContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsOwnerContextActualScope is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsOwnerContextQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsOwnerContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopment is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsRedevelopment struct {
+	Definition  string                                                                 `json:"definition"`
+	Status      IntelligenceHandoffComputedResultsRedevelopmentStatus                  `json:"status"`
+	Reasons     []string                                                               `json:"reasons"`
+	Metrics     map[string]IntelligenceHandoffComputedResultsRedevelopmentMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                                     `json:"counts"`
+	Exclusions  map[string]float64                                                     `json:"exclusions"`
+	EvidenceIDs []string                                                               `json:"evidence_ids"`
+	Context     IntelligenceHandoffComputedResultsRedevelopmentContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceHandoffComputedResultsRedevelopment, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceHandoffComputedResultsRedevelopment) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceHandoffComputedResultsRedevelopment
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentStatus is generated from the OpenAPI spec. It is
+// a string; the IntelligenceHandoffComputedResultsRedevelopmentStatus* constants list the
+// documented values.
+type IntelligenceHandoffComputedResultsRedevelopmentStatus = string
+
+// Documented values of IntelligenceHandoffComputedResultsRedevelopmentStatus.
+const (
+	IntelligenceHandoffComputedResultsRedevelopmentStatusAvailable        IntelligenceHandoffComputedResultsRedevelopmentStatus = "available"
+	IntelligenceHandoffComputedResultsRedevelopmentStatusPartial          IntelligenceHandoffComputedResultsRedevelopmentStatus = "partial"
+	IntelligenceHandoffComputedResultsRedevelopmentStatusInsufficientData IntelligenceHandoffComputedResultsRedevelopmentStatus = "insufficient_data"
+	IntelligenceHandoffComputedResultsRedevelopmentStatusUnavailable      IntelligenceHandoffComputedResultsRedevelopmentStatus = "unavailable"
+	IntelligenceHandoffComputedResultsRedevelopmentStatusStale            IntelligenceHandoffComputedResultsRedevelopmentStatus = "stale"
+	IntelligenceHandoffComputedResultsRedevelopmentStatusError            IntelligenceHandoffComputedResultsRedevelopmentStatus = "error"
+)
+
+// IntelligenceHandoffComputedResultsRedevelopmentMetricsValue is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsRedevelopmentMetricsValue struct {
+	Value *IntelligenceHandoffComputedResultsRedevelopmentMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                                            `json:"unit"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentMetricsValueValue is generated from the OpenAPI
+// spec.
+type IntelligenceHandoffComputedResultsRedevelopmentMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentContext is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsRedevelopmentContext struct {
+	InputKind           IntelligenceHandoffComputedResultsRedevelopmentContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceHandoffComputedResultsRedevelopmentContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceHandoffComputedResultsRedevelopmentContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceHandoffComputedResultsRedevelopmentContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                                       `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                                            `json:"metric_periods"`
+	LatestObservationAt *string                                                               `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                               `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                               `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                                 `json:"history_complete,omitempty"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentContextInputKind is generated from the OpenAPI
+// spec. It is a string; the IntelligenceHandoffComputedResultsRedevelopmentContextInputKind*
+// constants list the documented values.
+type IntelligenceHandoffComputedResultsRedevelopmentContextInputKind = string
+
+// Documented values of IntelligenceHandoffComputedResultsRedevelopmentContextInputKind.
+const (
+	IntelligenceHandoffComputedResultsRedevelopmentContextInputKindObserved        IntelligenceHandoffComputedResultsRedevelopmentContextInputKind = "observed"
+	IntelligenceHandoffComputedResultsRedevelopmentContextInputKindUserAssumptions IntelligenceHandoffComputedResultsRedevelopmentContextInputKind = "user_assumptions"
+	IntelligenceHandoffComputedResultsRedevelopmentContextInputKindUnavailable     IntelligenceHandoffComputedResultsRedevelopmentContextInputKind = "unavailable"
+)
+
+// IntelligenceHandoffComputedResultsRedevelopmentContextRequestedScope is generated from the
+// OpenAPI spec.
+type IntelligenceHandoffComputedResultsRedevelopmentContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentContextActualScope is generated from the OpenAPI
+// spec.
+type IntelligenceHandoffComputedResultsRedevelopmentContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffComputedResultsRedevelopmentContextQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffComputedResultsRedevelopmentContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceHandoffUserAssumptions is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptions struct {
+	ID               string                                   `json:"id"`
+	RunID            string                                   `json:"run_id"`
+	ParentRevisionID *string                                  `json:"parent_revision_id,omitempty"`
+	Label            IntelligenceHandoffUserAssumptionsLabel  `json:"label"`
+	CreatedAt        string                                   `json:"created_at"`
+	Assumptions      map[string]any                           `json:"assumptions"`
+	Result           IntelligenceHandoffUserAssumptionsResult `json:"result"`
+}
+
+// IntelligenceHandoffUserAssumptionsLabel is generated from the OpenAPI spec. It is a string; the
+// IntelligenceHandoffUserAssumptionsLabel* constants list the documented values.
+type IntelligenceHandoffUserAssumptionsLabel = string
+
+// Documented values of IntelligenceHandoffUserAssumptionsLabel.
+const (
+	IntelligenceHandoffUserAssumptionsLabelBase     IntelligenceHandoffUserAssumptionsLabel = "base"
+	IntelligenceHandoffUserAssumptionsLabelDownside IntelligenceHandoffUserAssumptionsLabel = "downside"
+	IntelligenceHandoffUserAssumptionsLabelUpside   IntelligenceHandoffUserAssumptionsLabel = "upside"
+)
+
+// IntelligenceHandoffUserAssumptionsResult is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResult struct {
+	Definition  string                                                          `json:"definition"`
+	Status      IntelligenceHandoffUserAssumptionsResultStatus                  `json:"status"`
+	Reasons     []string                                                        `json:"reasons"`
+	Metrics     map[string]IntelligenceHandoffUserAssumptionsResultMetricsValue `json:"metrics"`
+	Counts      map[string]float64                                              `json:"counts"`
+	Exclusions  map[string]float64                                              `json:"exclusions"`
+	EvidenceIDs []string                                                        `json:"evidence_ids"`
+	Context     IntelligenceHandoffUserAssumptionsResultContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceHandoffUserAssumptionsResult, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceHandoffUserAssumptionsResult) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceHandoffUserAssumptionsResult
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceHandoffUserAssumptionsResultStatus is generated from the OpenAPI spec. It is a
+// string; the IntelligenceHandoffUserAssumptionsResultStatus* constants list the documented
+// values.
+type IntelligenceHandoffUserAssumptionsResultStatus = string
+
+// Documented values of IntelligenceHandoffUserAssumptionsResultStatus.
+const (
+	IntelligenceHandoffUserAssumptionsResultStatusAvailable        IntelligenceHandoffUserAssumptionsResultStatus = "available"
+	IntelligenceHandoffUserAssumptionsResultStatusPartial          IntelligenceHandoffUserAssumptionsResultStatus = "partial"
+	IntelligenceHandoffUserAssumptionsResultStatusInsufficientData IntelligenceHandoffUserAssumptionsResultStatus = "insufficient_data"
+	IntelligenceHandoffUserAssumptionsResultStatusUnavailable      IntelligenceHandoffUserAssumptionsResultStatus = "unavailable"
+	IntelligenceHandoffUserAssumptionsResultStatusStale            IntelligenceHandoffUserAssumptionsResultStatus = "stale"
+	IntelligenceHandoffUserAssumptionsResultStatusError            IntelligenceHandoffUserAssumptionsResultStatus = "error"
+)
+
+// IntelligenceHandoffUserAssumptionsResultMetricsValue is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResultMetricsValue struct {
+	Value *IntelligenceHandoffUserAssumptionsResultMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                                     `json:"unit"`
+}
+
+// IntelligenceHandoffUserAssumptionsResultMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResultMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceHandoffUserAssumptionsResultContext is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResultContext struct {
+	InputKind           IntelligenceHandoffUserAssumptionsResultContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceHandoffUserAssumptionsResultContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceHandoffUserAssumptionsResultContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceHandoffUserAssumptionsResultContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                                                `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                                     `json:"metric_periods"`
+	LatestObservationAt *string                                                        `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                                        `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                                        `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                                          `json:"history_complete,omitempty"`
+}
+
+// IntelligenceHandoffUserAssumptionsResultContextInputKind is generated from the OpenAPI spec. It
+// is a string; the IntelligenceHandoffUserAssumptionsResultContextInputKind* constants list the
+// documented values.
+type IntelligenceHandoffUserAssumptionsResultContextInputKind = string
+
+// Documented values of IntelligenceHandoffUserAssumptionsResultContextInputKind.
+const (
+	IntelligenceHandoffUserAssumptionsResultContextInputKindObserved        IntelligenceHandoffUserAssumptionsResultContextInputKind = "observed"
+	IntelligenceHandoffUserAssumptionsResultContextInputKindUserAssumptions IntelligenceHandoffUserAssumptionsResultContextInputKind = "user_assumptions"
+	IntelligenceHandoffUserAssumptionsResultContextInputKindUnavailable     IntelligenceHandoffUserAssumptionsResultContextInputKind = "unavailable"
+)
+
+// IntelligenceHandoffUserAssumptionsResultContextRequestedScope is generated from the OpenAPI
+// spec.
+type IntelligenceHandoffUserAssumptionsResultContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffUserAssumptionsResultContextActualScope is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResultContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceHandoffUserAssumptionsResultContextQuery is generated from the OpenAPI spec.
+type IntelligenceHandoffUserAssumptionsResultContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceScenarioInput: All five unique cost buckets and a matching currency are required;
+// explicitly enter zero. No inferred defaults. Only fixed-dollar profit and purchase-independent
+// carry.
+type IntelligenceScenarioInput struct {
+	RunID            string                               `json:"run_id"`
+	Label            IntelligenceScenarioInputLabel       `json:"label"`
+	ParentRevisionID *string                              `json:"parent_revision_id,omitempty"`
+	Assumptions      IntelligenceScenarioInputAssumptions `json:"assumptions"`
+}
+
+// IntelligenceScenarioInputLabel is generated from the OpenAPI spec. It is a string; the
+// IntelligenceScenarioInputLabel* constants list the documented values.
+type IntelligenceScenarioInputLabel = string
+
+// Documented values of IntelligenceScenarioInputLabel.
+const (
+	IntelligenceScenarioInputLabelBase     IntelligenceScenarioInputLabel = "base"
+	IntelligenceScenarioInputLabelDownside IntelligenceScenarioInputLabel = "downside"
+	IntelligenceScenarioInputLabelUpside   IntelligenceScenarioInputLabel = "upside"
+)
+
+// IntelligenceScenarioInputAssumptions is generated from the OpenAPI spec.
+type IntelligenceScenarioInputAssumptions struct {
+	Currency              string                                      `json:"currency"`
+	GrossCompletedSale    string                                      `json:"gross_completed_sale"`
+	SellingCosts          string                                      `json:"selling_costs"`
+	Costs                 []IntelligenceScenarioInputAssumptionsCosts `json:"costs"`
+	RequiredProfitDollars string                                      `json:"required_profit_dollars"`
+	FixedAcquisitionCosts string                                      `json:"fixed_acquisition_costs"`
+	AcquisitionCostRate   string                                      `json:"acquisition_cost_rate"`
+	ProfitMode            string                                      `json:"profit_mode"`
+	CarryMode             string                                      `json:"carry_mode"`
+	InputSource           string                                      `json:"input_source"`
+}
+
+// IntelligenceScenarioInputAssumptionsCosts is generated from the OpenAPI spec.
+type IntelligenceScenarioInputAssumptionsCosts struct {
+	Bucket   IntelligenceScenarioInputAssumptionsCostsBucket `json:"bucket"`
+	Amount   string                                          `json:"amount"`
+	Currency string                                          `json:"currency"`
+}
+
+// IntelligenceScenarioInputAssumptionsCostsBucket is generated from the OpenAPI spec. It is a
+// string; the IntelligenceScenarioInputAssumptionsCostsBucket* constants list the documented
+// values.
+type IntelligenceScenarioInputAssumptionsCostsBucket = string
+
+// Documented values of IntelligenceScenarioInputAssumptionsCostsBucket.
+const (
+	IntelligenceScenarioInputAssumptionsCostsBucketHard         IntelligenceScenarioInputAssumptionsCostsBucket = "hard"
+	IntelligenceScenarioInputAssumptionsCostsBucketSoft         IntelligenceScenarioInputAssumptionsCostsBucket = "soft"
+	IntelligenceScenarioInputAssumptionsCostsBucketContingency  IntelligenceScenarioInputAssumptionsCostsBucket = "contingency"
+	IntelligenceScenarioInputAssumptionsCostsBucketCarry        IntelligenceScenarioInputAssumptionsCostsBucket = "carry"
+	IntelligenceScenarioInputAssumptionsCostsBucketOtherNonland IntelligenceScenarioInputAssumptionsCostsBucket = "other_nonland"
+)
+
+// ZillowMetric: Regional provider metric with its actual geography, variant, period, accepted
+// snapshot and source attribution. Never a parcel value, achieved rent or automatic scenario
+// input.
+type ZillowMetric struct {
+	Rights           *ZillowMetricRights           `json:"rights,omitempty"`
+	Metric           ZillowMetricMetric            `json:"metric"`
+	Status           ZillowMetricStatus            `json:"status"`
+	Reason           *string                       `json:"reason,omitempty"`
+	Definition       string                        `json:"definition"`
+	Unit             ZillowMetricUnit              `json:"unit"`
+	Value            *float64                      `json:"value,omitempty"`
+	Period           *string                       `json:"period,omitempty"`
+	Variant          *ZillowMetricVariant          `json:"variant,omitempty"`
+	Geography        *ZillowMetricGeography        `json:"geography,omitempty"`
+	Mapping          *ZillowMetricMapping          `json:"mapping,omitempty"`
+	Snapshot         *ZillowMetricSnapshot         `json:"snapshot,omitempty"`
+	AnnualChange     *ZillowMetricAnnualChange     `json:"annualChange,omitempty"`
+	MonthlyChange    *ZillowMetricMonthlyChange    `json:"monthlyChange,omitempty"`
+	RentAcceleration *ZillowMetricRentAcceleration `json:"rentAcceleration,omitempty"`
+	Points           []ZillowMetricPoints          `json:"points"`
+	SourceURL        string                        `json:"sourceUrl"`
+	Attribution      string                        `json:"attribution"`
+}
+
+// UnmarshalJSON decodes ZillowMetric, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetric) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetric
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowMetricRights is generated from the OpenAPI spec.
+type ZillowMetricRights struct {
+	Version     string  `json:"version"`
+	EvidenceURL *string `json:"evidenceUrl,omitempty"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
+}
+
+// ZillowMetricMetric is generated from the OpenAPI spec. It is a string; the ZillowMetricMetric*
+// constants list the documented values.
+type ZillowMetricMetric = string
+
+// Documented values of ZillowMetricMetric.
+const (
+	ZillowMetricMetricZori                ZillowMetricMetric = "zori"
+	ZillowMetricMetricZhvi                ZillowMetricMetric = "zhvi"
+	ZillowMetricMetricInventory           ZillowMetricMetric = "inventory"
+	ZillowMetricMetricPriceCutShare       ZillowMetricMetric = "price_cut_share"
+	ZillowMetricMetricMedianDaysToPending ZillowMetricMetric = "median_days_to_pending"
+)
+
+// ZillowMetricStatus is generated from the OpenAPI spec. It is a string; the ZillowMetricStatus*
+// constants list the documented values.
+type ZillowMetricStatus = string
+
+// Documented values of ZillowMetricStatus.
+const (
+	ZillowMetricStatusAvailable   ZillowMetricStatus = "available"
+	ZillowMetricStatusUnavailable ZillowMetricStatus = "unavailable"
+)
+
+// ZillowMetricUnit is generated from the OpenAPI spec. It is a string; the ZillowMetricUnit*
+// constants list the documented values.
+type ZillowMetricUnit = string
+
+// Documented values of ZillowMetricUnit.
+const (
+	ZillowMetricUnitUsd         ZillowMetricUnit = "usd"
+	ZillowMetricUnitUsdPerMonth ZillowMetricUnit = "usd_per_month"
+	ZillowMetricUnitCount       ZillowMetricUnit = "count"
+	ZillowMetricUnitFraction    ZillowMetricUnit = "fraction"
+	ZillowMetricUnitDays        ZillowMetricUnit = "days"
+)
+
+// ZillowMetricVariant is generated from the OpenAPI spec.
+type ZillowMetricVariant struct {
+	DatasetKey         string                                `json:"datasetKey"`
+	RegistryVersion    int64                                 `json:"registryVersion"`
+	Universe           string                                `json:"universe"`
+	Frequency          string                                `json:"frequency"`
+	Smoothing          string                                `json:"smoothing"`
+	SeasonalAdjustment ZillowMetricVariantSeasonalAdjustment `json:"seasonalAdjustment"`
+}
+
+// UnmarshalJSON decodes ZillowMetricVariant, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetricVariant) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetricVariant
+	aux := struct {
+		*plain
+		RegistryVersion lenientNumber[int64] `json:"registryVersion"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.RegistryVersion.assign(&r.RegistryVersion)
+	return softTypeError(err)
+}
+
+// ZillowMetricVariantSeasonalAdjustment is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricVariantSeasonalAdjustment* constants list the documented values.
+type ZillowMetricVariantSeasonalAdjustment = string
+
+// Documented values of ZillowMetricVariantSeasonalAdjustment.
+const (
+	ZillowMetricVariantSeasonalAdjustmentSa        ZillowMetricVariantSeasonalAdjustment = "sa"
+	ZillowMetricVariantSeasonalAdjustmentNotStated ZillowMetricVariantSeasonalAdjustment = "not_stated"
+)
+
+// ZillowMetricGeography is generated from the OpenAPI spec.
+type ZillowMetricGeography struct {
+	ProviderID string                    `json:"providerId"`
+	Name       string                    `json:"name"`
+	Type       ZillowMetricGeographyType `json:"type"`
+}
+
+// ZillowMetricGeographyType is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricGeographyType* constants list the documented values.
+type ZillowMetricGeographyType = string
+
+// Documented values of ZillowMetricGeographyType.
+const (
+	ZillowMetricGeographyTypeCountry ZillowMetricGeographyType = "country"
+	ZillowMetricGeographyTypeMsa     ZillowMetricGeographyType = "msa"
+	ZillowMetricGeographyTypeCounty  ZillowMetricGeographyType = "county"
+	ZillowMetricGeographyTypeZip     ZillowMetricGeographyType = "zip"
+)
+
+// ZillowMetricMapping is generated from the OpenAPI spec.
+type ZillowMetricMapping struct {
+	Method         ZillowMetricMappingMethod `json:"method"`
+	Version        string                    `json:"version"`
+	Source         string                    `json:"source"`
+	FallbackReason *string                   `json:"fallbackReason,omitempty"`
+}
+
+// ZillowMetricMappingMethod is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricMappingMethod* constants list the documented values.
+type ZillowMetricMappingMethod = string
+
+// Documented values of ZillowMetricMappingMethod.
+const (
+	ZillowMetricMappingMethodPostalZip              ZillowMetricMappingMethod = "postal_zip"
+	ZillowMetricMappingMethodCountyFIPS             ZillowMetricMappingMethod = "county_fips"
+	ZillowMetricMappingMethodVerifiedCrosswalk      ZillowMetricMappingMethod = "verified_crosswalk"
+	ZillowMetricMappingMethodExplicitProviderRegion ZillowMetricMappingMethod = "explicit_provider_region"
+)
+
+// ZillowMetricSnapshot is generated from the OpenAPI spec.
+type ZillowMetricSnapshot struct {
+	ID           string `json:"id"`
+	Sha256       string `json:"sha256"`
+	RetrievedAt  string `json:"retrievedAt"`
+	AcceptedAt   string `json:"acceptedAt"`
+	LatestPeriod string `json:"latestPeriod"`
+	Stale        bool   `json:"stale"`
+}
+
+// ZillowMetricAnnualChange is generated from the OpenAPI spec.
+type ZillowMetricAnnualChange struct {
+	Value  *float64                     `json:"value,omitempty"`
+	Unit   ZillowMetricAnnualChangeUnit `json:"unit"`
+	Reason *string                      `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowMetricAnnualChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetricAnnualChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetricAnnualChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowMetricAnnualChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricAnnualChangeUnit* constants list the documented values.
+type ZillowMetricAnnualChangeUnit = string
+
+// Documented values of ZillowMetricAnnualChangeUnit.
+const (
+	ZillowMetricAnnualChangeUnitPercent          ZillowMetricAnnualChangeUnit = "percent"
+	ZillowMetricAnnualChangeUnitPercentagePoints ZillowMetricAnnualChangeUnit = "percentage_points"
+	ZillowMetricAnnualChangeUnitDays             ZillowMetricAnnualChangeUnit = "days"
+)
+
+// ZillowMetricMonthlyChange is generated from the OpenAPI spec.
+type ZillowMetricMonthlyChange struct {
+	Value  *float64                      `json:"value,omitempty"`
+	Unit   ZillowMetricMonthlyChangeUnit `json:"unit"`
+	Reason *string                       `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowMetricMonthlyChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetricMonthlyChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetricMonthlyChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowMetricMonthlyChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricMonthlyChangeUnit* constants list the documented values.
+type ZillowMetricMonthlyChangeUnit = string
+
+// Documented values of ZillowMetricMonthlyChangeUnit.
+const (
+	ZillowMetricMonthlyChangeUnitPercent          ZillowMetricMonthlyChangeUnit = "percent"
+	ZillowMetricMonthlyChangeUnitPercentagePoints ZillowMetricMonthlyChangeUnit = "percentage_points"
+	ZillowMetricMonthlyChangeUnitDays             ZillowMetricMonthlyChangeUnit = "days"
+)
+
+// ZillowMetricRentAcceleration is generated from the OpenAPI spec.
+type ZillowMetricRentAcceleration struct {
+	Value  *float64                         `json:"value,omitempty"`
+	Unit   ZillowMetricRentAccelerationUnit `json:"unit"`
+	Reason *string                          `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowMetricRentAcceleration, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetricRentAcceleration) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetricRentAcceleration
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowMetricRentAccelerationUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowMetricRentAccelerationUnit* constants list the documented values.
+type ZillowMetricRentAccelerationUnit = string
+
+// Documented values of ZillowMetricRentAccelerationUnit.
+const (
+	ZillowMetricRentAccelerationUnitPercent          ZillowMetricRentAccelerationUnit = "percent"
+	ZillowMetricRentAccelerationUnitPercentagePoints ZillowMetricRentAccelerationUnit = "percentage_points"
+	ZillowMetricRentAccelerationUnitDays             ZillowMetricRentAccelerationUnit = "days"
+)
+
+// ZillowMetricPoints is generated from the OpenAPI spec.
+type ZillowMetricPoints struct {
+	Period string   `json:"period"`
+	Value  *float64 `json:"value,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowMetricPoints, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowMetricPoints) UnmarshalJSON(data []byte) error {
+	type plain ZillowMetricPoints
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContext: Each metric carries its own actual geography and missing reason. canonical_id is
+// omitted when source rights prevent parcel resolution.
+type ZillowContext struct {
+	SchemaVersion      string                          `json:"schemaVersion"`
+	Status             ZillowContextStatus             `json:"status"`
+	CanonicalID        *string                         `json:"canonical_id,omitempty"`
+	RequestedGeography ZillowContextRequestedGeography `json:"requestedGeography"`
+	Metrics            []ZillowContextMetrics          `json:"metrics"`
+	Reason             *string                         `json:"reason,omitempty"`
+	Rights             ZillowContextRights             `json:"rights"`
+}
+
+// ZillowContextStatus is generated from the OpenAPI spec. It is a string; the ZillowContextStatus*
+// constants list the documented values.
+type ZillowContextStatus = string
+
+// Documented values of ZillowContextStatus.
+const (
+	ZillowContextStatusAvailable   ZillowContextStatus = "available"
+	ZillowContextStatusPartial     ZillowContextStatus = "partial"
+	ZillowContextStatusUnavailable ZillowContextStatus = "unavailable"
+)
+
+// ZillowContextRequestedGeography is generated from the OpenAPI spec.
+type ZillowContextRequestedGeography struct {
+	Zip5       *string `json:"zip5,omitempty"`
+	CountyFIPS *string `json:"countyFips,omitempty"`
+	State      *string `json:"state,omitempty"`
+	CBSA       *string `json:"cbsa,omitempty"`
+}
+
+// ZillowContextMetrics is generated from the OpenAPI spec.
+type ZillowContextMetrics struct {
+	Rights           *ZillowContextMetricsRights           `json:"rights,omitempty"`
+	Metric           ZillowContextMetricsMetric            `json:"metric"`
+	Status           ZillowContextMetricsStatus            `json:"status"`
+	Reason           *string                               `json:"reason,omitempty"`
+	Definition       string                                `json:"definition"`
+	Unit             ZillowContextMetricsUnit              `json:"unit"`
+	Value            *float64                              `json:"value,omitempty"`
+	Period           *string                               `json:"period,omitempty"`
+	Variant          *ZillowContextMetricsVariant          `json:"variant,omitempty"`
+	Geography        *ZillowContextMetricsGeography        `json:"geography,omitempty"`
+	Mapping          *ZillowContextMetricsMapping          `json:"mapping,omitempty"`
+	Snapshot         *ZillowContextMetricsSnapshot         `json:"snapshot,omitempty"`
+	AnnualChange     *ZillowContextMetricsAnnualChange     `json:"annualChange,omitempty"`
+	MonthlyChange    *ZillowContextMetricsMonthlyChange    `json:"monthlyChange,omitempty"`
+	RentAcceleration *ZillowContextMetricsRentAcceleration `json:"rentAcceleration,omitempty"`
+	Points           []ZillowContextMetricsPoints          `json:"points"`
+	SourceURL        string                                `json:"sourceUrl"`
+	Attribution      string                                `json:"attribution"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetrics, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetrics) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetrics
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContextMetricsRights is generated from the OpenAPI spec.
+type ZillowContextMetricsRights struct {
+	Version     string  `json:"version"`
+	EvidenceURL *string `json:"evidenceUrl,omitempty"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
+}
+
+// ZillowContextMetricsMetric is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsMetric* constants list the documented values.
+type ZillowContextMetricsMetric = string
+
+// Documented values of ZillowContextMetricsMetric.
+const (
+	ZillowContextMetricsMetricZori                ZillowContextMetricsMetric = "zori"
+	ZillowContextMetricsMetricZhvi                ZillowContextMetricsMetric = "zhvi"
+	ZillowContextMetricsMetricInventory           ZillowContextMetricsMetric = "inventory"
+	ZillowContextMetricsMetricPriceCutShare       ZillowContextMetricsMetric = "price_cut_share"
+	ZillowContextMetricsMetricMedianDaysToPending ZillowContextMetricsMetric = "median_days_to_pending"
+)
+
+// ZillowContextMetricsStatus is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsStatus* constants list the documented values.
+type ZillowContextMetricsStatus = string
+
+// Documented values of ZillowContextMetricsStatus.
+const (
+	ZillowContextMetricsStatusAvailable   ZillowContextMetricsStatus = "available"
+	ZillowContextMetricsStatusUnavailable ZillowContextMetricsStatus = "unavailable"
+)
+
+// ZillowContextMetricsUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsUnit* constants list the documented values.
+type ZillowContextMetricsUnit = string
+
+// Documented values of ZillowContextMetricsUnit.
+const (
+	ZillowContextMetricsUnitUsd         ZillowContextMetricsUnit = "usd"
+	ZillowContextMetricsUnitUsdPerMonth ZillowContextMetricsUnit = "usd_per_month"
+	ZillowContextMetricsUnitCount       ZillowContextMetricsUnit = "count"
+	ZillowContextMetricsUnitFraction    ZillowContextMetricsUnit = "fraction"
+	ZillowContextMetricsUnitDays        ZillowContextMetricsUnit = "days"
+)
+
+// ZillowContextMetricsVariant is generated from the OpenAPI spec.
+type ZillowContextMetricsVariant struct {
+	DatasetKey         string                                        `json:"datasetKey"`
+	RegistryVersion    int64                                         `json:"registryVersion"`
+	Universe           string                                        `json:"universe"`
+	Frequency          string                                        `json:"frequency"`
+	Smoothing          string                                        `json:"smoothing"`
+	SeasonalAdjustment ZillowContextMetricsVariantSeasonalAdjustment `json:"seasonalAdjustment"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetricsVariant, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetricsVariant) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetricsVariant
+	aux := struct {
+		*plain
+		RegistryVersion lenientNumber[int64] `json:"registryVersion"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.RegistryVersion.assign(&r.RegistryVersion)
+	return softTypeError(err)
+}
+
+// ZillowContextMetricsVariantSeasonalAdjustment is generated from the OpenAPI spec. It is a
+// string; the ZillowContextMetricsVariantSeasonalAdjustment* constants list the documented values.
+type ZillowContextMetricsVariantSeasonalAdjustment = string
+
+// Documented values of ZillowContextMetricsVariantSeasonalAdjustment.
+const (
+	ZillowContextMetricsVariantSeasonalAdjustmentSa        ZillowContextMetricsVariantSeasonalAdjustment = "sa"
+	ZillowContextMetricsVariantSeasonalAdjustmentNotStated ZillowContextMetricsVariantSeasonalAdjustment = "not_stated"
+)
+
+// ZillowContextMetricsGeography is generated from the OpenAPI spec.
+type ZillowContextMetricsGeography struct {
+	ProviderID string                            `json:"providerId"`
+	Name       string                            `json:"name"`
+	Type       ZillowContextMetricsGeographyType `json:"type"`
+}
+
+// ZillowContextMetricsGeographyType is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsGeographyType* constants list the documented values.
+type ZillowContextMetricsGeographyType = string
+
+// Documented values of ZillowContextMetricsGeographyType.
+const (
+	ZillowContextMetricsGeographyTypeCountry ZillowContextMetricsGeographyType = "country"
+	ZillowContextMetricsGeographyTypeMsa     ZillowContextMetricsGeographyType = "msa"
+	ZillowContextMetricsGeographyTypeCounty  ZillowContextMetricsGeographyType = "county"
+	ZillowContextMetricsGeographyTypeZip     ZillowContextMetricsGeographyType = "zip"
+)
+
+// ZillowContextMetricsMapping is generated from the OpenAPI spec.
+type ZillowContextMetricsMapping struct {
+	Method         ZillowContextMetricsMappingMethod `json:"method"`
+	Version        string                            `json:"version"`
+	Source         string                            `json:"source"`
+	FallbackReason *string                           `json:"fallbackReason,omitempty"`
+}
+
+// ZillowContextMetricsMappingMethod is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsMappingMethod* constants list the documented values.
+type ZillowContextMetricsMappingMethod = string
+
+// Documented values of ZillowContextMetricsMappingMethod.
+const (
+	ZillowContextMetricsMappingMethodPostalZip              ZillowContextMetricsMappingMethod = "postal_zip"
+	ZillowContextMetricsMappingMethodCountyFIPS             ZillowContextMetricsMappingMethod = "county_fips"
+	ZillowContextMetricsMappingMethodVerifiedCrosswalk      ZillowContextMetricsMappingMethod = "verified_crosswalk"
+	ZillowContextMetricsMappingMethodExplicitProviderRegion ZillowContextMetricsMappingMethod = "explicit_provider_region"
+)
+
+// ZillowContextMetricsSnapshot is generated from the OpenAPI spec.
+type ZillowContextMetricsSnapshot struct {
+	ID           string `json:"id"`
+	Sha256       string `json:"sha256"`
+	RetrievedAt  string `json:"retrievedAt"`
+	AcceptedAt   string `json:"acceptedAt"`
+	LatestPeriod string `json:"latestPeriod"`
+	Stale        bool   `json:"stale"`
+}
+
+// ZillowContextMetricsAnnualChange is generated from the OpenAPI spec.
+type ZillowContextMetricsAnnualChange struct {
+	Value  *float64                             `json:"value,omitempty"`
+	Unit   ZillowContextMetricsAnnualChangeUnit `json:"unit"`
+	Reason *string                              `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetricsAnnualChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetricsAnnualChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetricsAnnualChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContextMetricsAnnualChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsAnnualChangeUnit* constants list the documented values.
+type ZillowContextMetricsAnnualChangeUnit = string
+
+// Documented values of ZillowContextMetricsAnnualChangeUnit.
+const (
+	ZillowContextMetricsAnnualChangeUnitPercent          ZillowContextMetricsAnnualChangeUnit = "percent"
+	ZillowContextMetricsAnnualChangeUnitPercentagePoints ZillowContextMetricsAnnualChangeUnit = "percentage_points"
+	ZillowContextMetricsAnnualChangeUnitDays             ZillowContextMetricsAnnualChangeUnit = "days"
+)
+
+// ZillowContextMetricsMonthlyChange is generated from the OpenAPI spec.
+type ZillowContextMetricsMonthlyChange struct {
+	Value  *float64                              `json:"value,omitempty"`
+	Unit   ZillowContextMetricsMonthlyChangeUnit `json:"unit"`
+	Reason *string                               `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetricsMonthlyChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetricsMonthlyChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetricsMonthlyChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContextMetricsMonthlyChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsMonthlyChangeUnit* constants list the documented values.
+type ZillowContextMetricsMonthlyChangeUnit = string
+
+// Documented values of ZillowContextMetricsMonthlyChangeUnit.
+const (
+	ZillowContextMetricsMonthlyChangeUnitPercent          ZillowContextMetricsMonthlyChangeUnit = "percent"
+	ZillowContextMetricsMonthlyChangeUnitPercentagePoints ZillowContextMetricsMonthlyChangeUnit = "percentage_points"
+	ZillowContextMetricsMonthlyChangeUnitDays             ZillowContextMetricsMonthlyChangeUnit = "days"
+)
+
+// ZillowContextMetricsRentAcceleration is generated from the OpenAPI spec.
+type ZillowContextMetricsRentAcceleration struct {
+	Value  *float64                                 `json:"value,omitempty"`
+	Unit   ZillowContextMetricsRentAccelerationUnit `json:"unit"`
+	Reason *string                                  `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetricsRentAcceleration, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetricsRentAcceleration) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetricsRentAcceleration
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContextMetricsRentAccelerationUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowContextMetricsRentAccelerationUnit* constants list the documented values.
+type ZillowContextMetricsRentAccelerationUnit = string
+
+// Documented values of ZillowContextMetricsRentAccelerationUnit.
+const (
+	ZillowContextMetricsRentAccelerationUnitPercent          ZillowContextMetricsRentAccelerationUnit = "percent"
+	ZillowContextMetricsRentAccelerationUnitPercentagePoints ZillowContextMetricsRentAccelerationUnit = "percentage_points"
+	ZillowContextMetricsRentAccelerationUnitDays             ZillowContextMetricsRentAccelerationUnit = "days"
+)
+
+// ZillowContextMetricsPoints is generated from the OpenAPI spec.
+type ZillowContextMetricsPoints struct {
+	Period string   `json:"period"`
+	Value  *float64 `json:"value,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowContextMetricsPoints, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowContextMetricsPoints) UnmarshalJSON(data []byte) error {
+	type plain ZillowContextMetricsPoints
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowContextRights is generated from the OpenAPI spec.
+type ZillowContextRights struct {
+	Status      ZillowContextRightsStatus `json:"status"`
+	Use         ZillowContextRightsUse    `json:"use"`
+	EvidenceURL *string                   `json:"evidenceUrl,omitempty"`
+}
+
+// ZillowContextRightsStatus is generated from the OpenAPI spec. It is a string; the
+// ZillowContextRightsStatus* constants list the documented values.
+type ZillowContextRightsStatus = string
+
+// Documented values of ZillowContextRightsStatus.
+const (
+	ZillowContextRightsStatusApproved ZillowContextRightsStatus = "approved"
+	ZillowContextRightsStatusUnknown  ZillowContextRightsStatus = "unknown"
+	ZillowContextRightsStatusDenied   ZillowContextRightsStatus = "denied"
+)
+
+// ZillowContextRightsUse is generated from the OpenAPI spec. It is a string; the
+// ZillowContextRightsUse* constants list the documented values.
+type ZillowContextRightsUse = string
+
+// Documented values of ZillowContextRightsUse.
+const (
+	ZillowContextRightsUseDisplay ZillowContextRightsUse = "display"
+	ZillowContextRightsUseAgent   ZillowContextRightsUse = "agent"
+	ZillowContextRightsUseExport  ZillowContextRightsUse = "export"
+)
+
+// ZillowComparison: Up to five explicit provider regions at a common period/accepted snapshot.
+// Gaps have a nullable value and explicit nullable reason; missing values are not zero.
+type ZillowComparison struct {
+	SchemaVersion     string                    `json:"schemaVersion"`
+	DatasetKey        string                    `json:"datasetKey"`
+	Period            string                    `json:"period"`
+	ReferenceRegionID string                    `json:"referenceRegionId"`
+	Metrics           []ZillowComparisonMetrics `json:"metrics"`
+	Gaps              []ZillowComparisonGaps    `json:"gaps"`
+}
+
+// ZillowComparisonMetrics is generated from the OpenAPI spec.
+type ZillowComparisonMetrics struct {
+	Rights           *ZillowComparisonMetricsRights           `json:"rights,omitempty"`
+	Metric           ZillowComparisonMetricsMetric            `json:"metric"`
+	Status           ZillowComparisonMetricsStatus            `json:"status"`
+	Reason           *string                                  `json:"reason,omitempty"`
+	Definition       string                                   `json:"definition"`
+	Unit             ZillowComparisonMetricsUnit              `json:"unit"`
+	Value            *float64                                 `json:"value,omitempty"`
+	Period           *string                                  `json:"period,omitempty"`
+	Variant          *ZillowComparisonMetricsVariant          `json:"variant,omitempty"`
+	Geography        *ZillowComparisonMetricsGeography        `json:"geography,omitempty"`
+	Mapping          *ZillowComparisonMetricsMapping          `json:"mapping,omitempty"`
+	Snapshot         *ZillowComparisonMetricsSnapshot         `json:"snapshot,omitempty"`
+	AnnualChange     *ZillowComparisonMetricsAnnualChange     `json:"annualChange,omitempty"`
+	MonthlyChange    *ZillowComparisonMetricsMonthlyChange    `json:"monthlyChange,omitempty"`
+	RentAcceleration *ZillowComparisonMetricsRentAcceleration `json:"rentAcceleration,omitempty"`
+	Points           []ZillowComparisonMetricsPoints          `json:"points"`
+	SourceURL        string                                   `json:"sourceUrl"`
+	Attribution      string                                   `json:"attribution"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetrics, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetrics) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetrics
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonMetricsRights is generated from the OpenAPI spec.
+type ZillowComparisonMetricsRights struct {
+	Version     string  `json:"version"`
+	EvidenceURL *string `json:"evidenceUrl,omitempty"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
+}
+
+// ZillowComparisonMetricsMetric is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsMetric* constants list the documented values.
+type ZillowComparisonMetricsMetric = string
+
+// Documented values of ZillowComparisonMetricsMetric.
+const (
+	ZillowComparisonMetricsMetricZori                ZillowComparisonMetricsMetric = "zori"
+	ZillowComparisonMetricsMetricZhvi                ZillowComparisonMetricsMetric = "zhvi"
+	ZillowComparisonMetricsMetricInventory           ZillowComparisonMetricsMetric = "inventory"
+	ZillowComparisonMetricsMetricPriceCutShare       ZillowComparisonMetricsMetric = "price_cut_share"
+	ZillowComparisonMetricsMetricMedianDaysToPending ZillowComparisonMetricsMetric = "median_days_to_pending"
+)
+
+// ZillowComparisonMetricsStatus is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsStatus* constants list the documented values.
+type ZillowComparisonMetricsStatus = string
+
+// Documented values of ZillowComparisonMetricsStatus.
+const (
+	ZillowComparisonMetricsStatusAvailable   ZillowComparisonMetricsStatus = "available"
+	ZillowComparisonMetricsStatusUnavailable ZillowComparisonMetricsStatus = "unavailable"
+)
+
+// ZillowComparisonMetricsUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsUnit* constants list the documented values.
+type ZillowComparisonMetricsUnit = string
+
+// Documented values of ZillowComparisonMetricsUnit.
+const (
+	ZillowComparisonMetricsUnitUsd         ZillowComparisonMetricsUnit = "usd"
+	ZillowComparisonMetricsUnitUsdPerMonth ZillowComparisonMetricsUnit = "usd_per_month"
+	ZillowComparisonMetricsUnitCount       ZillowComparisonMetricsUnit = "count"
+	ZillowComparisonMetricsUnitFraction    ZillowComparisonMetricsUnit = "fraction"
+	ZillowComparisonMetricsUnitDays        ZillowComparisonMetricsUnit = "days"
+)
+
+// ZillowComparisonMetricsVariant is generated from the OpenAPI spec.
+type ZillowComparisonMetricsVariant struct {
+	DatasetKey         string                                           `json:"datasetKey"`
+	RegistryVersion    int64                                            `json:"registryVersion"`
+	Universe           string                                           `json:"universe"`
+	Frequency          string                                           `json:"frequency"`
+	Smoothing          string                                           `json:"smoothing"`
+	SeasonalAdjustment ZillowComparisonMetricsVariantSeasonalAdjustment `json:"seasonalAdjustment"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetricsVariant, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetricsVariant) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetricsVariant
+	aux := struct {
+		*plain
+		RegistryVersion lenientNumber[int64] `json:"registryVersion"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.RegistryVersion.assign(&r.RegistryVersion)
+	return softTypeError(err)
+}
+
+// ZillowComparisonMetricsVariantSeasonalAdjustment is generated from the OpenAPI spec. It is a
+// string; the ZillowComparisonMetricsVariantSeasonalAdjustment* constants list the documented
+// values.
+type ZillowComparisonMetricsVariantSeasonalAdjustment = string
+
+// Documented values of ZillowComparisonMetricsVariantSeasonalAdjustment.
+const (
+	ZillowComparisonMetricsVariantSeasonalAdjustmentSa        ZillowComparisonMetricsVariantSeasonalAdjustment = "sa"
+	ZillowComparisonMetricsVariantSeasonalAdjustmentNotStated ZillowComparisonMetricsVariantSeasonalAdjustment = "not_stated"
+)
+
+// ZillowComparisonMetricsGeography is generated from the OpenAPI spec.
+type ZillowComparisonMetricsGeography struct {
+	ProviderID string                               `json:"providerId"`
+	Name       string                               `json:"name"`
+	Type       ZillowComparisonMetricsGeographyType `json:"type"`
+}
+
+// ZillowComparisonMetricsGeographyType is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsGeographyType* constants list the documented values.
+type ZillowComparisonMetricsGeographyType = string
+
+// Documented values of ZillowComparisonMetricsGeographyType.
+const (
+	ZillowComparisonMetricsGeographyTypeCountry ZillowComparisonMetricsGeographyType = "country"
+	ZillowComparisonMetricsGeographyTypeMsa     ZillowComparisonMetricsGeographyType = "msa"
+	ZillowComparisonMetricsGeographyTypeCounty  ZillowComparisonMetricsGeographyType = "county"
+	ZillowComparisonMetricsGeographyTypeZip     ZillowComparisonMetricsGeographyType = "zip"
+)
+
+// ZillowComparisonMetricsMapping is generated from the OpenAPI spec.
+type ZillowComparisonMetricsMapping struct {
+	Method         ZillowComparisonMetricsMappingMethod `json:"method"`
+	Version        string                               `json:"version"`
+	Source         string                               `json:"source"`
+	FallbackReason *string                              `json:"fallbackReason,omitempty"`
+}
+
+// ZillowComparisonMetricsMappingMethod is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsMappingMethod* constants list the documented values.
+type ZillowComparisonMetricsMappingMethod = string
+
+// Documented values of ZillowComparisonMetricsMappingMethod.
+const (
+	ZillowComparisonMetricsMappingMethodPostalZip              ZillowComparisonMetricsMappingMethod = "postal_zip"
+	ZillowComparisonMetricsMappingMethodCountyFIPS             ZillowComparisonMetricsMappingMethod = "county_fips"
+	ZillowComparisonMetricsMappingMethodVerifiedCrosswalk      ZillowComparisonMetricsMappingMethod = "verified_crosswalk"
+	ZillowComparisonMetricsMappingMethodExplicitProviderRegion ZillowComparisonMetricsMappingMethod = "explicit_provider_region"
+)
+
+// ZillowComparisonMetricsSnapshot is generated from the OpenAPI spec.
+type ZillowComparisonMetricsSnapshot struct {
+	ID           string `json:"id"`
+	Sha256       string `json:"sha256"`
+	RetrievedAt  string `json:"retrievedAt"`
+	AcceptedAt   string `json:"acceptedAt"`
+	LatestPeriod string `json:"latestPeriod"`
+	Stale        bool   `json:"stale"`
+}
+
+// ZillowComparisonMetricsAnnualChange is generated from the OpenAPI spec.
+type ZillowComparisonMetricsAnnualChange struct {
+	Value  *float64                                `json:"value,omitempty"`
+	Unit   ZillowComparisonMetricsAnnualChangeUnit `json:"unit"`
+	Reason *string                                 `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetricsAnnualChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetricsAnnualChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetricsAnnualChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonMetricsAnnualChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsAnnualChangeUnit* constants list the documented values.
+type ZillowComparisonMetricsAnnualChangeUnit = string
+
+// Documented values of ZillowComparisonMetricsAnnualChangeUnit.
+const (
+	ZillowComparisonMetricsAnnualChangeUnitPercent          ZillowComparisonMetricsAnnualChangeUnit = "percent"
+	ZillowComparisonMetricsAnnualChangeUnitPercentagePoints ZillowComparisonMetricsAnnualChangeUnit = "percentage_points"
+	ZillowComparisonMetricsAnnualChangeUnitDays             ZillowComparisonMetricsAnnualChangeUnit = "days"
+)
+
+// ZillowComparisonMetricsMonthlyChange is generated from the OpenAPI spec.
+type ZillowComparisonMetricsMonthlyChange struct {
+	Value  *float64                                 `json:"value,omitempty"`
+	Unit   ZillowComparisonMetricsMonthlyChangeUnit `json:"unit"`
+	Reason *string                                  `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetricsMonthlyChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetricsMonthlyChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetricsMonthlyChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonMetricsMonthlyChangeUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonMetricsMonthlyChangeUnit* constants list the documented values.
+type ZillowComparisonMetricsMonthlyChangeUnit = string
+
+// Documented values of ZillowComparisonMetricsMonthlyChangeUnit.
+const (
+	ZillowComparisonMetricsMonthlyChangeUnitPercent          ZillowComparisonMetricsMonthlyChangeUnit = "percent"
+	ZillowComparisonMetricsMonthlyChangeUnitPercentagePoints ZillowComparisonMetricsMonthlyChangeUnit = "percentage_points"
+	ZillowComparisonMetricsMonthlyChangeUnitDays             ZillowComparisonMetricsMonthlyChangeUnit = "days"
+)
+
+// ZillowComparisonMetricsRentAcceleration is generated from the OpenAPI spec.
+type ZillowComparisonMetricsRentAcceleration struct {
+	Value  *float64                                    `json:"value,omitempty"`
+	Unit   ZillowComparisonMetricsRentAccelerationUnit `json:"unit"`
+	Reason *string                                     `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetricsRentAcceleration, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetricsRentAcceleration) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetricsRentAcceleration
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonMetricsRentAccelerationUnit is generated from the OpenAPI spec. It is a string;
+// the ZillowComparisonMetricsRentAccelerationUnit* constants list the documented values.
+type ZillowComparisonMetricsRentAccelerationUnit = string
+
+// Documented values of ZillowComparisonMetricsRentAccelerationUnit.
+const (
+	ZillowComparisonMetricsRentAccelerationUnitPercent          ZillowComparisonMetricsRentAccelerationUnit = "percent"
+	ZillowComparisonMetricsRentAccelerationUnitPercentagePoints ZillowComparisonMetricsRentAccelerationUnit = "percentage_points"
+	ZillowComparisonMetricsRentAccelerationUnitDays             ZillowComparisonMetricsRentAccelerationUnit = "days"
+)
+
+// ZillowComparisonMetricsPoints is generated from the OpenAPI spec.
+type ZillowComparisonMetricsPoints struct {
+	Period string   `json:"period"`
+	Value  *float64 `json:"value,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonMetricsPoints, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonMetricsPoints) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonMetricsPoints
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonGaps is generated from the OpenAPI spec.
+type ZillowComparisonGaps struct {
+	RegionID string                   `json:"regionId"`
+	Value    *float64                 `json:"value,omitempty"`
+	Reason   *string                  `json:"reason,omitempty"`
+	Unit     ZillowComparisonGapsUnit `json:"unit"`
+}
+
+// UnmarshalJSON decodes ZillowComparisonGaps, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowComparisonGaps) UnmarshalJSON(data []byte) error {
+	type plain ZillowComparisonGaps
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowComparisonGapsUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowComparisonGapsUnit* constants list the documented values.
+type ZillowComparisonGapsUnit = string
+
+// Documented values of ZillowComparisonGapsUnit.
+const (
+	ZillowComparisonGapsUnitDays             ZillowComparisonGapsUnit = "days"
+	ZillowComparisonGapsUnitPercentagePoints ZillowComparisonGapsUnit = "percentage_points"
+)
+
+// IntelligenceParcelID is generated from the OpenAPI spec.
+type IntelligenceParcelID = string
+
+// IntelligenceInstant is generated from the OpenAPI spec.
+type IntelligenceInstant = string
+
+// IntelligenceRetainedID is generated from the OpenAPI spec.
+type IntelligenceRetainedID = string
+
+// IntelligenceCalculation is generated from the OpenAPI spec.
+type IntelligenceCalculation struct {
+	Definition  string                                         `json:"definition"`
+	Status      IntelligenceCalculationStatus                  `json:"status"`
+	Reasons     []string                                       `json:"reasons"`
+	Metrics     map[string]IntelligenceCalculationMetricsValue `json:"metrics"`
+	Counts      map[string]float64                             `json:"counts"`
+	Exclusions  map[string]float64                             `json:"exclusions"`
+	EvidenceIDs []string                                       `json:"evidence_ids"`
+	Context     IntelligenceCalculationContext                 `json:"context"`
+}
+
+// UnmarshalJSON decodes IntelligenceCalculation, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceCalculation) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceCalculation
+	aux := struct {
+		*plain
+		Counts     lenientMap[float64] `json:"counts"`
+		Exclusions lenientMap[float64] `json:"exclusions"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Counts.assign(&r.Counts)
+	aux.Exclusions.assign(&r.Exclusions)
+	return softTypeError(err)
+}
+
+// IntelligenceCalculationStatus is generated from the OpenAPI spec. It is a string; the
+// IntelligenceCalculationStatus* constants list the documented values.
+type IntelligenceCalculationStatus = string
+
+// Documented values of IntelligenceCalculationStatus.
+const (
+	IntelligenceCalculationStatusAvailable        IntelligenceCalculationStatus = "available"
+	IntelligenceCalculationStatusPartial          IntelligenceCalculationStatus = "partial"
+	IntelligenceCalculationStatusInsufficientData IntelligenceCalculationStatus = "insufficient_data"
+	IntelligenceCalculationStatusUnavailable      IntelligenceCalculationStatus = "unavailable"
+	IntelligenceCalculationStatusStale            IntelligenceCalculationStatus = "stale"
+	IntelligenceCalculationStatusError            IntelligenceCalculationStatus = "error"
+)
+
+// IntelligenceCalculationMetricsValue is generated from the OpenAPI spec.
+type IntelligenceCalculationMetricsValue struct {
+	Value *IntelligenceCalculationMetricsValueValue `json:"value,omitempty"`
+	Unit  string                                    `json:"unit"`
+}
+
+// IntelligenceCalculationMetricsValueValue is generated from the OpenAPI spec.
+type IntelligenceCalculationMetricsValueValue struct {
+	Numerator   string `json:"numerator"`
+	Denominator string `json:"denominator"`
+}
+
+// IntelligenceCalculationContext is generated from the OpenAPI spec.
+type IntelligenceCalculationContext struct {
+	InputKind           IntelligenceCalculationContextInputKind       `json:"input_kind"`
+	RequestedScope      *IntelligenceCalculationContextRequestedScope `json:"requested_scope,omitempty"`
+	ActualScope         *IntelligenceCalculationContextActualScope    `json:"actual_scope,omitempty"`
+	Query               *IntelligenceCalculationContextQuery          `json:"query,omitempty"`
+	Period              json.RawMessage                               `json:"period,omitempty"`
+	MetricPeriods       map[string]json.RawMessage                    `json:"metric_periods"`
+	LatestObservationAt *string                                       `json:"latest_observation_at,omitempty"`
+	SourceAsOf          *string                                       `json:"source_as_of,omitempty"`
+	SourceVintage       *string                                       `json:"source_vintage,omitempty"`
+	HistoryComplete     *bool                                         `json:"history_complete,omitempty"`
+}
+
+// IntelligenceCalculationContextInputKind is generated from the OpenAPI spec. It is a string; the
+// IntelligenceCalculationContextInputKind* constants list the documented values.
+type IntelligenceCalculationContextInputKind = string
+
+// Documented values of IntelligenceCalculationContextInputKind.
+const (
+	IntelligenceCalculationContextInputKindObserved        IntelligenceCalculationContextInputKind = "observed"
+	IntelligenceCalculationContextInputKindUserAssumptions IntelligenceCalculationContextInputKind = "user_assumptions"
+	IntelligenceCalculationContextInputKindUnavailable     IntelligenceCalculationContextInputKind = "unavailable"
+)
+
+// IntelligenceCalculationContextRequestedScope is generated from the OpenAPI spec.
+type IntelligenceCalculationContextRequestedScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceCalculationContextActualScope is generated from the OpenAPI spec.
+type IntelligenceCalculationContextActualScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceCalculationContextQuery is generated from the OpenAPI spec.
+type IntelligenceCalculationContextQuery struct {
+	AsOf            string `json:"as_of"`
+	KnowledgeCutoff string `json:"knowledge_cutoff"`
+}
+
+// IntelligenceResidualAssumptions is generated from the OpenAPI spec.
+type IntelligenceResidualAssumptions struct {
+	Currency              string                                 `json:"currency"`
+	GrossCompletedSale    string                                 `json:"gross_completed_sale"`
+	SellingCosts          string                                 `json:"selling_costs"`
+	Costs                 []IntelligenceResidualAssumptionsCosts `json:"costs"`
+	RequiredProfitDollars string                                 `json:"required_profit_dollars"`
+	FixedAcquisitionCosts string                                 `json:"fixed_acquisition_costs"`
+	AcquisitionCostRate   string                                 `json:"acquisition_cost_rate"`
+	ProfitMode            string                                 `json:"profit_mode"`
+	CarryMode             string                                 `json:"carry_mode"`
+	InputSource           string                                 `json:"input_source"`
+}
+
+// IntelligenceResidualAssumptionsCosts is generated from the OpenAPI spec.
+type IntelligenceResidualAssumptionsCosts struct {
+	Bucket   IntelligenceResidualAssumptionsCostsBucket `json:"bucket"`
+	Amount   string                                     `json:"amount"`
+	Currency string                                     `json:"currency"`
+}
+
+// IntelligenceResidualAssumptionsCostsBucket is generated from the OpenAPI spec. It is a string;
+// the IntelligenceResidualAssumptionsCostsBucket* constants list the documented values.
+type IntelligenceResidualAssumptionsCostsBucket = string
+
+// Documented values of IntelligenceResidualAssumptionsCostsBucket.
+const (
+	IntelligenceResidualAssumptionsCostsBucketHard         IntelligenceResidualAssumptionsCostsBucket = "hard"
+	IntelligenceResidualAssumptionsCostsBucketSoft         IntelligenceResidualAssumptionsCostsBucket = "soft"
+	IntelligenceResidualAssumptionsCostsBucketContingency  IntelligenceResidualAssumptionsCostsBucket = "contingency"
+	IntelligenceResidualAssumptionsCostsBucketCarry        IntelligenceResidualAssumptionsCostsBucket = "carry"
+	IntelligenceResidualAssumptionsCostsBucketOtherNonland IntelligenceResidualAssumptionsCostsBucket = "other_nonland"
+)
+
+// IntelligenceScenarioRevision is generated from the OpenAPI spec.
+type IntelligenceScenarioRevision struct {
+	ID               IntelligenceRetainedID            `json:"id"`
+	RunID            IntelligenceRetainedID            `json:"run_id"`
+	ParentRevisionID *IntelligenceRetainedID           `json:"parent_revision_id,omitempty"`
+	Label            IntelligenceScenarioRevisionLabel `json:"label"`
+	CreatedAt        IntelligenceInstant               `json:"created_at"`
+	Assumptions      IntelligenceResidualAssumptions   `json:"assumptions"`
+	Result           IntelligenceCalculation           `json:"result"`
+}
+
+// IntelligenceScenarioRevisionLabel is generated from the OpenAPI spec. It is a string; the
+// IntelligenceScenarioRevisionLabel* constants list the documented values.
+type IntelligenceScenarioRevisionLabel = string
+
+// Documented values of IntelligenceScenarioRevisionLabel.
+const (
+	IntelligenceScenarioRevisionLabelBase     IntelligenceScenarioRevisionLabel = "base"
+	IntelligenceScenarioRevisionLabelDownside IntelligenceScenarioRevisionLabel = "downside"
+	IntelligenceScenarioRevisionLabelUpside   IntelligenceScenarioRevisionLabel = "upside"
+)
+
+// IntelligenceRights is generated from the OpenAPI spec.
+type IntelligenceRights struct {
+	Version       string `json:"version"`
+	Display       bool   `json:"display"`
+	Derived       bool   `json:"derived"`
+	Cache         bool   `json:"cache"`
+	RetainHistory bool   `json:"retain_history"`
+	Export        bool   `json:"export"`
+	Ai            bool   `json:"ai"`
+}
+
+// IntelligenceScope is generated from the OpenAPI spec.
+type IntelligenceScope struct {
+	Geography    string `json:"geography"`
+	PropertyType string `json:"property_type"`
+	Currency     string `json:"currency"`
+}
+
+// IntelligenceSourceCapability is generated from the OpenAPI spec.
+type IntelligenceSourceCapability struct {
+	ID                 string              `json:"id"`
+	Version            string              `json:"version"`
+	SourceProduct      string              `json:"source_product"`
+	SourceVersion      string              `json:"source_version"`
+	Scope              IntelligenceScope   `json:"scope"`
+	Rights             *IntelligenceRights `json:"rights,omitempty"`
+	AdditiveComponents bool                `json:"additive_components"`
+	Complete           bool                `json:"complete"`
+	MatureThrough      *string             `json:"mature_through,omitempty"`
+	SourceAsOf         *string             `json:"source_as_of,omitempty"`
+	StaleAfter         *string             `json:"stale_after,omitempty"`
+}
+
+// IntelligenceAssessmentObservation is generated from the OpenAPI spec.
+type IntelligenceAssessmentObservation struct {
+	Source                 string                                 `json:"source"`
+	RecordID               string                                 `json:"record_id"`
+	Version                string                                 `json:"version"`
+	EvidenceID             string                                 `json:"evidence_id"`
+	EffectiveAt            string                                 `json:"effective_at"`
+	CapturedAt             string                                 `json:"captured_at"`
+	ObservedAt             *string                                `json:"observed_at,omitempty"`
+	Land                   *string                                `json:"land,omitempty"`
+	Improvement            *string                                `json:"improvement,omitempty"`
+	Basis                  IntelligenceAssessmentObservationBasis `json:"basis"`
+	Vintage                string                                 `json:"vintage"`
+	SourceProduct          string                                 `json:"source_product"`
+	SourceVersion          string                                 `json:"source_version"`
+	ComponentBasisVerified bool                                   `json:"component_basis_verified"`
+}
+
+// IntelligenceAssessmentObservationBasis is generated from the OpenAPI spec. It is a string; the
+// IntelligenceAssessmentObservationBasis* constants list the documented values.
+type IntelligenceAssessmentObservationBasis = string
+
+// Documented values of IntelligenceAssessmentObservationBasis.
+const (
+	IntelligenceAssessmentObservationBasisAssessed  IntelligenceAssessmentObservationBasis = "assessed"
+	IntelligenceAssessmentObservationBasisAppraised IntelligenceAssessmentObservationBasis = "appraised"
+	IntelligenceAssessmentObservationBasisMarket    IntelligenceAssessmentObservationBasis = "market"
+	IntelligenceAssessmentObservationBasisTaxable   IntelligenceAssessmentObservationBasis = "taxable"
+)
+
+// IntelligenceEvidence is generated from the OpenAPI spec.
+type IntelligenceEvidence struct {
+	ID                 IntelligenceRetainedID                 `json:"id"`
+	SourceProduct      string                                 `json:"source_product"`
+	SourceVersion      string                                 `json:"source_version"`
+	CapturedAt         IntelligenceInstant                    `json:"captured_at"`
+	ObservedAt         *string                                `json:"observed_at,omitempty"`
+	SourceAsOf         *string                                `json:"source_as_of,omitempty"`
+	SourceURL          *string                                `json:"source_url,omitempty"`
+	KnowledgeBasis     IntelligenceEvidenceKnowledgeBasis     `json:"knowledge_basis"`
+	EffectiveTimeBasis IntelligenceEvidenceEffectiveTimeBasis `json:"effective_time_basis"`
+	Capability         IntelligenceSourceCapability           `json:"capability"`
+	Assessment         IntelligenceAssessmentObservation      `json:"assessment"`
+	SourceRecord       IntelligenceEvidenceSourceRecord       `json:"source_record"`
+}
+
+// IntelligenceEvidenceKnowledgeBasis is generated from the OpenAPI spec. It is a string; the
+// IntelligenceEvidenceKnowledgeBasis* constants list the documented values.
+type IntelligenceEvidenceKnowledgeBasis = string
+
+// Documented values of IntelligenceEvidenceKnowledgeBasis.
+const (
+	IntelligenceEvidenceKnowledgeBasisSourceObservedAt     IntelligenceEvidenceKnowledgeBasis = "source_observed_at"
+	IntelligenceEvidenceKnowledgeBasisFirstRetainedCapture IntelligenceEvidenceKnowledgeBasis = "first_retained_capture"
+)
+
+// IntelligenceEvidenceEffectiveTimeBasis is generated from the OpenAPI spec. It is a string; the
+// IntelligenceEvidenceEffectiveTimeBasis* constants list the documented values.
+type IntelligenceEvidenceEffectiveTimeBasis = string
+
+// Documented values of IntelligenceEvidenceEffectiveTimeBasis.
+const (
+	IntelligenceEvidenceEffectiveTimeBasisSourceEventTime          IntelligenceEvidenceEffectiveTimeBasis = "source_event_time"
+	IntelligenceEvidenceEffectiveTimeBasisFirstRetainedCaptureOnly IntelligenceEvidenceEffectiveTimeBasis = "first_retained_capture_only"
+)
+
+// IntelligenceEvidenceSourceRecord is generated from the OpenAPI spec.
+type IntelligenceEvidenceSourceRecord struct {
+	AssessmentYear *int64  `json:"assessment_year,omitempty"`
+	TaxYear        *int64  `json:"tax_year,omitempty"`
+	VintageYear    *int64  `json:"vintage_year,omitempty"`
+	ReportedTotal  *string `json:"reported_total,omitempty"`
+	TaxAmount      *string `json:"tax_amount,omitempty"`
+	TaxPaidAmount  *string `json:"tax_paid_amount,omitempty"`
+}
+
+// UnmarshalJSON decodes IntelligenceEvidenceSourceRecord, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *IntelligenceEvidenceSourceRecord) UnmarshalJSON(data []byte) error {
+	type plain IntelligenceEvidenceSourceRecord
+	aux := struct {
+		*plain
+		AssessmentYear lenientNumber[int64] `json:"assessment_year"`
+		TaxYear        lenientNumber[int64] `json:"tax_year"`
+		VintageYear    lenientNumber[int64] `json:"vintage_year"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.AssessmentYear.assignPtr(&r.AssessmentYear)
+	aux.TaxYear.assignPtr(&r.TaxYear)
+	aux.VintageYear.assignPtr(&r.VintageYear)
+	return softTypeError(err)
+}
+
+// IntelligenceRunDetail is generated from the OpenAPI spec.
+type IntelligenceRunDetail struct {
+	Run      IntelligenceRun        `json:"run"`
+	Evidence []IntelligenceEvidence `json:"evidence"`
+}
+
+// ZillowPropertyComparison is generated from the OpenAPI spec.
+type ZillowPropertyComparison struct {
+	SchemaVersion string                             `json:"schemaVersion"`
+	CanonicalID   *string                            `json:"canonical_id,omitempty"`
+	Metric        ZillowPropertyComparisonMetric     `json:"metric"`
+	Period        string                             `json:"period"`
+	AsOf          string                             `json:"asOf"`
+	Reference     *ZillowPropertyComparisonReference `json:"reference,omitempty"`
+	Items         []ZillowPropertyComparisonItems    `json:"items"`
+}
+
+// ZillowPropertyComparisonMetric is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonMetric* constants list the documented values.
+type ZillowPropertyComparisonMetric = string
+
+// Documented values of ZillowPropertyComparisonMetric.
+const (
+	ZillowPropertyComparisonMetricZori                ZillowPropertyComparisonMetric = "zori"
+	ZillowPropertyComparisonMetricZhvi                ZillowPropertyComparisonMetric = "zhvi"
+	ZillowPropertyComparisonMetricInventory           ZillowPropertyComparisonMetric = "inventory"
+	ZillowPropertyComparisonMetricPriceCutShare       ZillowPropertyComparisonMetric = "price_cut_share"
+	ZillowPropertyComparisonMetricMedianDaysToPending ZillowPropertyComparisonMetric = "median_days_to_pending"
+)
+
+// ZillowPropertyComparisonReference is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonReference* constants list the documented values.
+type ZillowPropertyComparisonReference = string
+
+// Documented values of ZillowPropertyComparisonReference.
+const (
+	ZillowPropertyComparisonReferenceCounty   ZillowPropertyComparisonReference = "county"
+	ZillowPropertyComparisonReferenceMetro    ZillowPropertyComparisonReference = "metro"
+	ZillowPropertyComparisonReferenceNational ZillowPropertyComparisonReference = "national"
+)
+
+// ZillowPropertyComparisonItems is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItems struct {
+	Level      ZillowPropertyComparisonItemsLevel  `json:"level"`
+	DatasetKey *string                             `json:"datasetKey,omitempty"`
+	Result     ZillowPropertyComparisonItemsResult `json:"result"`
+	Gap        ZillowPropertyComparisonItemsGap    `json:"gap"`
+}
+
+// ZillowPropertyComparisonItemsLevel is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonItemsLevel* constants list the documented values.
+type ZillowPropertyComparisonItemsLevel = string
+
+// Documented values of ZillowPropertyComparisonItemsLevel.
+const (
+	ZillowPropertyComparisonItemsLevelCounty   ZillowPropertyComparisonItemsLevel = "county"
+	ZillowPropertyComparisonItemsLevelMetro    ZillowPropertyComparisonItemsLevel = "metro"
+	ZillowPropertyComparisonItemsLevelNational ZillowPropertyComparisonItemsLevel = "national"
+)
+
+// ZillowPropertyComparisonItemsResult is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResult struct {
+	Rights           *ZillowPropertyComparisonItemsResultRights           `json:"rights,omitempty"`
+	Metric           ZillowPropertyComparisonItemsResultMetric            `json:"metric"`
+	Status           ZillowPropertyComparisonItemsResultStatus            `json:"status"`
+	Reason           *ZillowPropertyComparisonItemsResultReason           `json:"reason,omitempty"`
+	Definition       string                                               `json:"definition"`
+	Unit             ZillowPropertyComparisonItemsResultUnit              `json:"unit"`
+	Value            *float64                                             `json:"value,omitempty"`
+	Period           *string                                              `json:"period,omitempty"`
+	Variant          *ZillowPropertyComparisonItemsResultVariant          `json:"variant,omitempty"`
+	Geography        *ZillowPropertyComparisonItemsResultGeography        `json:"geography,omitempty"`
+	Mapping          *ZillowPropertyComparisonItemsResultMapping          `json:"mapping,omitempty"`
+	Snapshot         *ZillowPropertyComparisonItemsResultSnapshot         `json:"snapshot,omitempty"`
+	AnnualChange     *ZillowPropertyComparisonItemsResultAnnualChange     `json:"annualChange,omitempty"`
+	MonthlyChange    *ZillowPropertyComparisonItemsResultMonthlyChange    `json:"monthlyChange,omitempty"`
+	RentAcceleration *ZillowPropertyComparisonItemsResultRentAcceleration `json:"rentAcceleration,omitempty"`
+	Points           []ZillowPropertyComparisonItemsResultPoints          `json:"points"`
+	SourceURL        string                                               `json:"sourceUrl"`
+	Attribution      string                                               `json:"attribution"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResult, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResult) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResult
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsResultRights is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultRights struct {
+	Version     string  `json:"version"`
+	EvidenceURL *string `json:"evidenceUrl,omitempty"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
+}
+
+// ZillowPropertyComparisonItemsResultMetric is generated from the OpenAPI spec. It is a string;
+// the ZillowPropertyComparisonItemsResultMetric* constants list the documented values.
+type ZillowPropertyComparisonItemsResultMetric = string
+
+// Documented values of ZillowPropertyComparisonItemsResultMetric.
+const (
+	ZillowPropertyComparisonItemsResultMetricZori                ZillowPropertyComparisonItemsResultMetric = "zori"
+	ZillowPropertyComparisonItemsResultMetricZhvi                ZillowPropertyComparisonItemsResultMetric = "zhvi"
+	ZillowPropertyComparisonItemsResultMetricInventory           ZillowPropertyComparisonItemsResultMetric = "inventory"
+	ZillowPropertyComparisonItemsResultMetricPriceCutShare       ZillowPropertyComparisonItemsResultMetric = "price_cut_share"
+	ZillowPropertyComparisonItemsResultMetricMedianDaysToPending ZillowPropertyComparisonItemsResultMetric = "median_days_to_pending"
+)
+
+// ZillowPropertyComparisonItemsResultStatus is generated from the OpenAPI spec. It is a string;
+// the ZillowPropertyComparisonItemsResultStatus* constants list the documented values.
+type ZillowPropertyComparisonItemsResultStatus = string
+
+// Documented values of ZillowPropertyComparisonItemsResultStatus.
+const (
+	ZillowPropertyComparisonItemsResultStatusAvailable   ZillowPropertyComparisonItemsResultStatus = "available"
+	ZillowPropertyComparisonItemsResultStatusUnavailable ZillowPropertyComparisonItemsResultStatus = "unavailable"
+)
+
+// ZillowPropertyComparisonItemsResultReason is generated from the OpenAPI spec. It is a string;
+// the ZillowPropertyComparisonItemsResultReason* constants list the documented values.
+type ZillowPropertyComparisonItemsResultReason = string
+
+// Documented values of ZillowPropertyComparisonItemsResultReason.
+const (
+	ZillowPropertyComparisonItemsResultReasonMissingPeriod                ZillowPropertyComparisonItemsResultReason = "missing_period"
+	ZillowPropertyComparisonItemsResultReasonNonpositiveDenominator       ZillowPropertyComparisonItemsResultReason = "nonpositive_denominator"
+	ZillowPropertyComparisonItemsResultReasonNonFiniteResult              ZillowPropertyComparisonItemsResultReason = "non_finite_result"
+	ZillowPropertyComparisonItemsResultReasonNotApplicable                ZillowPropertyComparisonItemsResultReason = "not_applicable"
+	ZillowPropertyComparisonItemsResultReasonMappingUnavailable           ZillowPropertyComparisonItemsResultReason = "mapping_unavailable"
+	ZillowPropertyComparisonItemsResultReasonNoCoverage                   ZillowPropertyComparisonItemsResultReason = "no_coverage"
+	ZillowPropertyComparisonItemsResultReasonSuppressed                   ZillowPropertyComparisonItemsResultReason = "suppressed"
+	ZillowPropertyComparisonItemsResultReasonHistoricalVintageUnavailable ZillowPropertyComparisonItemsResultReason = "historical_vintage_unavailable"
+	ZillowPropertyComparisonItemsResultReasonRightsUnavailable            ZillowPropertyComparisonItemsResultReason = "rights_unavailable"
+	ZillowPropertyComparisonItemsResultReasonDisabled                     ZillowPropertyComparisonItemsResultReason = "disabled"
+	ZillowPropertyComparisonItemsResultReasonIncompatibleVariant          ZillowPropertyComparisonItemsResultReason = "incompatible_variant"
+)
+
+// ZillowPropertyComparisonItemsResultUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonItemsResultUnit* constants list the documented values.
+type ZillowPropertyComparisonItemsResultUnit = string
+
+// Documented values of ZillowPropertyComparisonItemsResultUnit.
+const (
+	ZillowPropertyComparisonItemsResultUnitUsd         ZillowPropertyComparisonItemsResultUnit = "usd"
+	ZillowPropertyComparisonItemsResultUnitUsdPerMonth ZillowPropertyComparisonItemsResultUnit = "usd_per_month"
+	ZillowPropertyComparisonItemsResultUnitCount       ZillowPropertyComparisonItemsResultUnit = "count"
+	ZillowPropertyComparisonItemsResultUnitFraction    ZillowPropertyComparisonItemsResultUnit = "fraction"
+	ZillowPropertyComparisonItemsResultUnitDays        ZillowPropertyComparisonItemsResultUnit = "days"
+)
+
+// ZillowPropertyComparisonItemsResultVariant is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultVariant struct {
+	DatasetKey         string                                                       `json:"datasetKey"`
+	RegistryVersion    int64                                                        `json:"registryVersion"`
+	Universe           string                                                       `json:"universe"`
+	Frequency          string                                                       `json:"frequency"`
+	Smoothing          string                                                       `json:"smoothing"`
+	SeasonalAdjustment ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment `json:"seasonalAdjustment"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResultVariant, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResultVariant) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResultVariant
+	aux := struct {
+		*plain
+		RegistryVersion lenientNumber[int64] `json:"registryVersion"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.RegistryVersion.assign(&r.RegistryVersion)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment is generated from the OpenAPI spec.
+// It is a string; the ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment* constants list
+// the documented values.
+type ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment = string
+
+// Documented values of ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment.
+const (
+	ZillowPropertyComparisonItemsResultVariantSeasonalAdjustmentSa        ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment = "sa"
+	ZillowPropertyComparisonItemsResultVariantSeasonalAdjustmentNotStated ZillowPropertyComparisonItemsResultVariantSeasonalAdjustment = "not_stated"
+)
+
+// ZillowPropertyComparisonItemsResultGeography is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultGeography struct {
+	ProviderID string                                           `json:"providerId"`
+	Name       string                                           `json:"name"`
+	Type       ZillowPropertyComparisonItemsResultGeographyType `json:"type"`
+}
+
+// ZillowPropertyComparisonItemsResultGeographyType is generated from the OpenAPI spec. It is a
+// string; the ZillowPropertyComparisonItemsResultGeographyType* constants list the documented
+// values.
+type ZillowPropertyComparisonItemsResultGeographyType = string
+
+// Documented values of ZillowPropertyComparisonItemsResultGeographyType.
+const (
+	ZillowPropertyComparisonItemsResultGeographyTypeCountry ZillowPropertyComparisonItemsResultGeographyType = "country"
+	ZillowPropertyComparisonItemsResultGeographyTypeMsa     ZillowPropertyComparisonItemsResultGeographyType = "msa"
+	ZillowPropertyComparisonItemsResultGeographyTypeCounty  ZillowPropertyComparisonItemsResultGeographyType = "county"
+	ZillowPropertyComparisonItemsResultGeographyTypeZip     ZillowPropertyComparisonItemsResultGeographyType = "zip"
+)
+
+// ZillowPropertyComparisonItemsResultMapping is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultMapping struct {
+	Method         ZillowPropertyComparisonItemsResultMappingMethod `json:"method"`
+	Version        string                                           `json:"version"`
+	Source         string                                           `json:"source"`
+	FallbackReason *string                                          `json:"fallbackReason,omitempty"`
+}
+
+// ZillowPropertyComparisonItemsResultMappingMethod is generated from the OpenAPI spec. It is a
+// string; the ZillowPropertyComparisonItemsResultMappingMethod* constants list the documented
+// values.
+type ZillowPropertyComparisonItemsResultMappingMethod = string
+
+// Documented values of ZillowPropertyComparisonItemsResultMappingMethod.
+const (
+	ZillowPropertyComparisonItemsResultMappingMethodPostalZip              ZillowPropertyComparisonItemsResultMappingMethod = "postal_zip"
+	ZillowPropertyComparisonItemsResultMappingMethodCountyFIPS             ZillowPropertyComparisonItemsResultMappingMethod = "county_fips"
+	ZillowPropertyComparisonItemsResultMappingMethodVerifiedCrosswalk      ZillowPropertyComparisonItemsResultMappingMethod = "verified_crosswalk"
+	ZillowPropertyComparisonItemsResultMappingMethodExplicitProviderRegion ZillowPropertyComparisonItemsResultMappingMethod = "explicit_provider_region"
+)
+
+// ZillowPropertyComparisonItemsResultSnapshot is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultSnapshot struct {
+	ID           string `json:"id"`
+	Sha256       string `json:"sha256"`
+	RetrievedAt  string `json:"retrievedAt"`
+	AcceptedAt   string `json:"acceptedAt"`
+	LatestPeriod string `json:"latestPeriod"`
+	Stale        bool   `json:"stale"`
+}
+
+// ZillowPropertyComparisonItemsResultAnnualChange is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultAnnualChange struct {
+	Value  *float64                                               `json:"value,omitempty"`
+	Unit   ZillowPropertyComparisonItemsResultAnnualChangeUnit    `json:"unit"`
+	Reason *ZillowPropertyComparisonItemsResultAnnualChangeReason `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResultAnnualChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResultAnnualChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResultAnnualChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsResultAnnualChangeUnit is generated from the OpenAPI spec. It is a
+// string; the ZillowPropertyComparisonItemsResultAnnualChangeUnit* constants list the documented
+// values.
+type ZillowPropertyComparisonItemsResultAnnualChangeUnit = string
+
+// Documented values of ZillowPropertyComparisonItemsResultAnnualChangeUnit.
+const (
+	ZillowPropertyComparisonItemsResultAnnualChangeUnitPercent          ZillowPropertyComparisonItemsResultAnnualChangeUnit = "percent"
+	ZillowPropertyComparisonItemsResultAnnualChangeUnitPercentagePoints ZillowPropertyComparisonItemsResultAnnualChangeUnit = "percentage_points"
+	ZillowPropertyComparisonItemsResultAnnualChangeUnitDays             ZillowPropertyComparisonItemsResultAnnualChangeUnit = "days"
+)
+
+// ZillowPropertyComparisonItemsResultAnnualChangeReason is generated from the OpenAPI spec. It is
+// a string; the ZillowPropertyComparisonItemsResultAnnualChangeReason* constants list the
+// documented values.
+type ZillowPropertyComparisonItemsResultAnnualChangeReason = string
+
+// Documented values of ZillowPropertyComparisonItemsResultAnnualChangeReason.
+const (
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonMissingPeriod                ZillowPropertyComparisonItemsResultAnnualChangeReason = "missing_period"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonNonpositiveDenominator       ZillowPropertyComparisonItemsResultAnnualChangeReason = "nonpositive_denominator"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonNonFiniteResult              ZillowPropertyComparisonItemsResultAnnualChangeReason = "non_finite_result"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonNotApplicable                ZillowPropertyComparisonItemsResultAnnualChangeReason = "not_applicable"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonMappingUnavailable           ZillowPropertyComparisonItemsResultAnnualChangeReason = "mapping_unavailable"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonNoCoverage                   ZillowPropertyComparisonItemsResultAnnualChangeReason = "no_coverage"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonSuppressed                   ZillowPropertyComparisonItemsResultAnnualChangeReason = "suppressed"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonHistoricalVintageUnavailable ZillowPropertyComparisonItemsResultAnnualChangeReason = "historical_vintage_unavailable"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonRightsUnavailable            ZillowPropertyComparisonItemsResultAnnualChangeReason = "rights_unavailable"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonDisabled                     ZillowPropertyComparisonItemsResultAnnualChangeReason = "disabled"
+	ZillowPropertyComparisonItemsResultAnnualChangeReasonIncompatibleVariant          ZillowPropertyComparisonItemsResultAnnualChangeReason = "incompatible_variant"
+)
+
+// ZillowPropertyComparisonItemsResultMonthlyChange is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultMonthlyChange struct {
+	Value  *float64                                                `json:"value,omitempty"`
+	Unit   ZillowPropertyComparisonItemsResultMonthlyChangeUnit    `json:"unit"`
+	Reason *ZillowPropertyComparisonItemsResultMonthlyChangeReason `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResultMonthlyChange, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResultMonthlyChange) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResultMonthlyChange
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsResultMonthlyChangeUnit is generated from the OpenAPI spec. It is a
+// string; the ZillowPropertyComparisonItemsResultMonthlyChangeUnit* constants list the documented
+// values.
+type ZillowPropertyComparisonItemsResultMonthlyChangeUnit = string
+
+// Documented values of ZillowPropertyComparisonItemsResultMonthlyChangeUnit.
+const (
+	ZillowPropertyComparisonItemsResultMonthlyChangeUnitPercent          ZillowPropertyComparisonItemsResultMonthlyChangeUnit = "percent"
+	ZillowPropertyComparisonItemsResultMonthlyChangeUnitPercentagePoints ZillowPropertyComparisonItemsResultMonthlyChangeUnit = "percentage_points"
+	ZillowPropertyComparisonItemsResultMonthlyChangeUnitDays             ZillowPropertyComparisonItemsResultMonthlyChangeUnit = "days"
+)
+
+// ZillowPropertyComparisonItemsResultMonthlyChangeReason is generated from the OpenAPI spec. It is
+// a string; the ZillowPropertyComparisonItemsResultMonthlyChangeReason* constants list the
+// documented values.
+type ZillowPropertyComparisonItemsResultMonthlyChangeReason = string
+
+// Documented values of ZillowPropertyComparisonItemsResultMonthlyChangeReason.
+const (
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonMissingPeriod                ZillowPropertyComparisonItemsResultMonthlyChangeReason = "missing_period"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonNonpositiveDenominator       ZillowPropertyComparisonItemsResultMonthlyChangeReason = "nonpositive_denominator"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonNonFiniteResult              ZillowPropertyComparisonItemsResultMonthlyChangeReason = "non_finite_result"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonNotApplicable                ZillowPropertyComparisonItemsResultMonthlyChangeReason = "not_applicable"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonMappingUnavailable           ZillowPropertyComparisonItemsResultMonthlyChangeReason = "mapping_unavailable"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonNoCoverage                   ZillowPropertyComparisonItemsResultMonthlyChangeReason = "no_coverage"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonSuppressed                   ZillowPropertyComparisonItemsResultMonthlyChangeReason = "suppressed"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonHistoricalVintageUnavailable ZillowPropertyComparisonItemsResultMonthlyChangeReason = "historical_vintage_unavailable"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonRightsUnavailable            ZillowPropertyComparisonItemsResultMonthlyChangeReason = "rights_unavailable"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonDisabled                     ZillowPropertyComparisonItemsResultMonthlyChangeReason = "disabled"
+	ZillowPropertyComparisonItemsResultMonthlyChangeReasonIncompatibleVariant          ZillowPropertyComparisonItemsResultMonthlyChangeReason = "incompatible_variant"
+)
+
+// ZillowPropertyComparisonItemsResultRentAcceleration is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultRentAcceleration struct {
+	Value  *float64                                                   `json:"value,omitempty"`
+	Unit   ZillowPropertyComparisonItemsResultRentAccelerationUnit    `json:"unit"`
+	Reason *ZillowPropertyComparisonItemsResultRentAccelerationReason `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResultRentAcceleration, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResultRentAcceleration) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResultRentAcceleration
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsResultRentAccelerationUnit is generated from the OpenAPI spec. It
+// is a string; the ZillowPropertyComparisonItemsResultRentAccelerationUnit* constants list the
+// documented values.
+type ZillowPropertyComparisonItemsResultRentAccelerationUnit = string
+
+// Documented values of ZillowPropertyComparisonItemsResultRentAccelerationUnit.
+const (
+	ZillowPropertyComparisonItemsResultRentAccelerationUnitPercent          ZillowPropertyComparisonItemsResultRentAccelerationUnit = "percent"
+	ZillowPropertyComparisonItemsResultRentAccelerationUnitPercentagePoints ZillowPropertyComparisonItemsResultRentAccelerationUnit = "percentage_points"
+	ZillowPropertyComparisonItemsResultRentAccelerationUnitDays             ZillowPropertyComparisonItemsResultRentAccelerationUnit = "days"
+)
+
+// ZillowPropertyComparisonItemsResultRentAccelerationReason is generated from the OpenAPI spec. It
+// is a string; the ZillowPropertyComparisonItemsResultRentAccelerationReason* constants list the
+// documented values.
+type ZillowPropertyComparisonItemsResultRentAccelerationReason = string
+
+// Documented values of ZillowPropertyComparisonItemsResultRentAccelerationReason.
+const (
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonMissingPeriod                ZillowPropertyComparisonItemsResultRentAccelerationReason = "missing_period"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonNonpositiveDenominator       ZillowPropertyComparisonItemsResultRentAccelerationReason = "nonpositive_denominator"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonNonFiniteResult              ZillowPropertyComparisonItemsResultRentAccelerationReason = "non_finite_result"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonNotApplicable                ZillowPropertyComparisonItemsResultRentAccelerationReason = "not_applicable"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonMappingUnavailable           ZillowPropertyComparisonItemsResultRentAccelerationReason = "mapping_unavailable"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonNoCoverage                   ZillowPropertyComparisonItemsResultRentAccelerationReason = "no_coverage"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonSuppressed                   ZillowPropertyComparisonItemsResultRentAccelerationReason = "suppressed"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonHistoricalVintageUnavailable ZillowPropertyComparisonItemsResultRentAccelerationReason = "historical_vintage_unavailable"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonRightsUnavailable            ZillowPropertyComparisonItemsResultRentAccelerationReason = "rights_unavailable"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonDisabled                     ZillowPropertyComparisonItemsResultRentAccelerationReason = "disabled"
+	ZillowPropertyComparisonItemsResultRentAccelerationReasonIncompatibleVariant          ZillowPropertyComparisonItemsResultRentAccelerationReason = "incompatible_variant"
+)
+
+// ZillowPropertyComparisonItemsResultPoints is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsResultPoints struct {
+	Period string   `json:"period"`
+	Value  *float64 `json:"value,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsResultPoints, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsResultPoints) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsResultPoints
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsGap is generated from the OpenAPI spec.
+type ZillowPropertyComparisonItemsGap struct {
+	Value  *float64                                `json:"value,omitempty"`
+	Unit   ZillowPropertyComparisonItemsGapUnit    `json:"unit"`
+	Reason *ZillowPropertyComparisonItemsGapReason `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes ZillowPropertyComparisonItemsGap, accepting numeric fields sent as JSON numbers or as
+// quoted decimal strings.
+func (r *ZillowPropertyComparisonItemsGap) UnmarshalJSON(data []byte) error {
+	type plain ZillowPropertyComparisonItemsGap
+	aux := struct {
+		*plain
+		Value lenientNumber[float64] `json:"value"`
+	}{plain: (*plain)(r)}
+	err := json.Unmarshal(data, &aux)
+	aux.Value.assignPtr(&r.Value)
+	return softTypeError(err)
+}
+
+// ZillowPropertyComparisonItemsGapUnit is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonItemsGapUnit* constants list the documented values.
+type ZillowPropertyComparisonItemsGapUnit = string
+
+// Documented values of ZillowPropertyComparisonItemsGapUnit.
+const (
+	ZillowPropertyComparisonItemsGapUnitPercent          ZillowPropertyComparisonItemsGapUnit = "percent"
+	ZillowPropertyComparisonItemsGapUnitPercentagePoints ZillowPropertyComparisonItemsGapUnit = "percentage_points"
+	ZillowPropertyComparisonItemsGapUnitDays             ZillowPropertyComparisonItemsGapUnit = "days"
+)
+
+// ZillowPropertyComparisonItemsGapReason is generated from the OpenAPI spec. It is a string; the
+// ZillowPropertyComparisonItemsGapReason* constants list the documented values.
+type ZillowPropertyComparisonItemsGapReason = string
+
+// Documented values of ZillowPropertyComparisonItemsGapReason.
+const (
+	ZillowPropertyComparisonItemsGapReasonMissingPeriod                ZillowPropertyComparisonItemsGapReason = "missing_period"
+	ZillowPropertyComparisonItemsGapReasonNonpositiveDenominator       ZillowPropertyComparisonItemsGapReason = "nonpositive_denominator"
+	ZillowPropertyComparisonItemsGapReasonNonFiniteResult              ZillowPropertyComparisonItemsGapReason = "non_finite_result"
+	ZillowPropertyComparisonItemsGapReasonNotApplicable                ZillowPropertyComparisonItemsGapReason = "not_applicable"
+	ZillowPropertyComparisonItemsGapReasonMappingUnavailable           ZillowPropertyComparisonItemsGapReason = "mapping_unavailable"
+	ZillowPropertyComparisonItemsGapReasonNoCoverage                   ZillowPropertyComparisonItemsGapReason = "no_coverage"
+	ZillowPropertyComparisonItemsGapReasonSuppressed                   ZillowPropertyComparisonItemsGapReason = "suppressed"
+	ZillowPropertyComparisonItemsGapReasonHistoricalVintageUnavailable ZillowPropertyComparisonItemsGapReason = "historical_vintage_unavailable"
+	ZillowPropertyComparisonItemsGapReasonRightsUnavailable            ZillowPropertyComparisonItemsGapReason = "rights_unavailable"
+	ZillowPropertyComparisonItemsGapReasonDisabled                     ZillowPropertyComparisonItemsGapReason = "disabled"
+	ZillowPropertyComparisonItemsGapReasonIncompatibleVariant          ZillowPropertyComparisonItemsGapReason = "incompatible_variant"
+)
+
+// ZillowComparisonResponse is generated from the OpenAPI spec.
+type ZillowComparisonResponse = json.RawMessage

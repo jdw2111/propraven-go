@@ -48,6 +48,7 @@ func buildDealsAbsenteeRequest(params *DealsAbsenteeParams) *apiRequest {
 		addQuery(req.query, "state_fips", params.StateFIPS)
 		addQuery(req.query, "min_value", params.MinValue)
 		addQuery(req.query, "out_of_state", params.OutOfState)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "offset", params.Offset)
 	}
@@ -67,17 +68,24 @@ type DealsAbsenteeParams struct {
 	MinValue *float64 `query:"min_value" json:"-"`
 
 	// Only return owners whose mailing address is in a different state.
-	OutOfState *bool  `query:"out_of_state" json:"-"`
-	Limit      *int64 `query:"limit" json:"-"`
-	Offset     *int64 `query:"offset" json:"-"`
+	OutOfState *bool `query:"out_of_state" json:"-"`
+
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter.
+	TaxDelinquent *bool  `query:"tax_delinquent" json:"-"`
+	Limit         *int64 `query:"limit" json:"-"`
+	Offset        *int64 `query:"offset" json:"-"`
 }
 
 // DealsAbsenteeResponse: Find absentee owners
 type DealsAbsenteeResponse struct {
-	Data   []DealsAbsenteeResponseData `json:"data"`
-	Total  int64                       `json:"total"`
-	Limit  int64                       `json:"limit"`
-	Offset int64                       `json:"offset"`
+	Data                 []DealsAbsenteeResponseData `json:"data"`
+	Total                int64                       `json:"total"`
+	Limit                int64                       `json:"limit"`
+	Offset               int64                       `json:"offset"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter       `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes DealsAbsenteeResponse, accepting numeric fields sent as JSON numbers or as
@@ -168,6 +176,7 @@ func buildDealsFlipsRequest(params *DealsFlipsParams) *apiRequest {
 		addQuery(req.query, "flip_tier", params.FlipTier)
 		addQuery(req.query, "min_profit", params.MinProfit)
 		addQuery(req.query, "view", params.View)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "offset", params.Offset)
 	}
@@ -192,9 +201,15 @@ type DealsFlipsParams struct {
 	MinProfit *float64 `query:"min_profit" json:"-"`
 
 	// Set to 'flippers' to return a ranked list of top flippers instead of individual flips.
-	View   *DealsFlipsParamsView `query:"view" json:"-"`
-	Limit  *int64                `query:"limit" json:"-"`
-	Offset *int64                `query:"offset" json:"-"`
+	View *DealsFlipsParamsView `query:"view" json:"-"`
+
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter. Parcel view only (400 with view=flippers).
+	TaxDelinquent *bool  `query:"tax_delinquent" json:"-"`
+	Limit         *int64 `query:"limit" json:"-"`
+	Offset        *int64 `query:"offset" json:"-"`
 }
 
 // DealsFlipsParamsFlipTier is generated from the OpenAPI spec. It is a string; the
@@ -219,10 +234,11 @@ const (
 
 // DealsFlipsResponse: Find property flips
 type DealsFlipsResponse struct {
-	Data   []DealsFlipsResponseData `json:"data"`
-	Total  int64                    `json:"total"`
-	Limit  int64                    `json:"limit"`
-	Offset int64                    `json:"offset"`
+	Data                 []DealsFlipsResponseData `json:"data"`
+	Total                int64                    `json:"total"`
+	Limit                int64                    `json:"limit"`
+	Offset               int64                    `json:"offset"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter    `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes DealsFlipsResponse, accepting numeric fields sent as JSON numbers or as
@@ -426,6 +442,7 @@ func buildDealsEntitiesRequest(params *DealsEntitiesParams) *apiRequest {
 		addQuery(req.query, "min_value", params.MinValue)
 		addQuery(req.query, "zoning", params.Zoning)
 		addQuery(req.query, "top", params.Top)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "offset", params.Offset)
 	}
@@ -455,6 +472,12 @@ type DealsEntitiesParams struct {
 
 	// If true, returns aggregated entity rankings with summary stats instead of per-parcel rows.
 	Top *bool `query:"top" json:"-"`
+
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter. Parcel list only (400 with top=true and no geography or search).
+	TaxDelinquent *bool `query:"tax_delinquent" json:"-"`
 
 	// Page size, max 500.
 	Limit *int64 `query:"limit" json:"-"`
@@ -520,6 +543,7 @@ func buildDealsHighLandRatioRequest(params *DealsHighLandRatioParams) *apiReques
 		addQuery(req.query, "min_ratio", params.MinRatio)
 		addQuery(req.query, "min_value", params.MinValue)
 		addQuery(req.query, "zoning", params.Zoning)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "offset", params.Offset)
 	}
@@ -544,6 +568,12 @@ type DealsHighLandRatioParams struct {
 	// Zoning substring filter.
 	Zoning *string `query:"zoning" json:"-"`
 
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter.
+	TaxDelinquent *bool `query:"tax_delinquent" json:"-"`
+
 	// Page size, max 500.
 	Limit *int64 `query:"limit" json:"-"`
 
@@ -553,10 +583,11 @@ type DealsHighLandRatioParams struct {
 
 // DealsHighLandRatioResponse: Find parcels with high land-to-improvement ratio
 type DealsHighLandRatioResponse struct {
-	Data   []HighLandRatioParcel `json:"data"`
-	Total  int64                 `json:"total"`
-	Limit  int64                 `json:"limit"`
-	Offset int64                 `json:"offset"`
+	Data                 []HighLandRatioParcel `json:"data"`
+	Total                int64                 `json:"total"`
+	Limit                int64                 `json:"limit"`
+	Offset               int64                 `json:"offset"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes DealsHighLandRatioResponse, accepting numeric fields sent as JSON numbers or as
@@ -701,6 +732,7 @@ func buildDealsLongHoldRequest(params *DealsLongHoldParams) *apiRequest {
 		addQuery(req.query, "min_years", params.MinYears)
 		addQuery(req.query, "hold_tier", params.HoldTier)
 		addQuery(req.query, "min_value", params.MinValue)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "offset", params.Offset)
 	}
@@ -725,6 +757,12 @@ type DealsLongHoldParams struct {
 	// Minimum assessed value, USD.
 	MinValue *int64 `query:"min_value" json:"-"`
 
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter.
+	TaxDelinquent *bool `query:"tax_delinquent" json:"-"`
+
 	// Page size, max 500.
 	Limit *int64 `query:"limit" json:"-"`
 
@@ -746,10 +784,11 @@ const (
 
 // DealsLongHoldResponse: Find long-held parcels (10+ years)
 type DealsLongHoldResponse struct {
-	Data   []LongHoldParcel `json:"data"`
-	Total  int64            `json:"total"`
-	Limit  int64            `json:"limit"`
-	Offset int64            `json:"offset"`
+	Data                 []LongHoldParcel      `json:"data"`
+	Total                int64                 `json:"total"`
+	Limit                int64                 `json:"limit"`
+	Offset               int64                 `json:"offset"`
+	TaxDelinquencyFilter *TaxDelinquencyFilter `json:"tax_delinquency_filter,omitempty"`
 }
 
 // UnmarshalJSON decodes DealsLongHoldResponse, accepting numeric fields sent as JSON numbers or as

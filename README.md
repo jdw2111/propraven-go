@@ -196,6 +196,7 @@ if rl != nil {
 | `Permits(ctx, id, params)` | `GET /api/v1/parcels/{id}/permits` | Get parcel permits |
 | `Deeds(ctx, id, params)` | `GET /api/v1/parcels/{id}/deeds` | Get parcel deed history |
 | `Risks(ctx, id, params)` | `GET /api/v1/parcels/{id}/risks` | Get parcel risk assessment |
+| `TaxStatus(ctx, id, params)` | `GET /api/v1/parcels/{id}/tax-status` | Property-tax delinquency status of a parcel |
 | `Geojson(ctx, params)` | `GET /api/v1/parcels/geojson` | Parcel polygons as GeoJSON for a bounding box |
 | `Report(ctx, id, params)` | `GET /api/v1/parcels/{id}/report` | Parcel dossier (paid, provenance-first) |
 | `CompPack(ctx, id, params)` | `GET /api/v1/parcels/{id}/comp-pack` | Comp pack (paid, priced per pack) — with a FREE preview |
@@ -259,6 +260,9 @@ if rl != nil {
 | `Flips(ctx, params)` | `GET /api/v1/market/flips` | Flip-activity summary grouped by county |
 | `FlipsIter(ctx, params, iterOpts)` | offset pages of `data` | iterator over `Flips` |
 | `Snapshot(ctx, params)` | `GET /api/v1/market/snapshot` | Market snapshot for a geography |
+| `ZillowContext(ctx, params)` | `GET /api/v1/market/zillow/context` | Get qualified regional Zillow context for a property |
+| `ZillowTimeseries(ctx, params)` | `GET /api/v1/market/zillow/timeseries` | Get one provider region monthly series |
+| `CompareZillowMarkets(ctx, params)` | `GET /api/v1/market/zillow/compare` | Compare explicit provider regions at one common period |
 
 ### client.Owners
 
@@ -364,6 +368,21 @@ if rl != nil {
 | Method | HTTP | Summary |
 |---|---|---|
 | `Stations(ctx, params)` | `GET /api/v1/traffic/stations` | Traffic count stations in a bounding box |
+
+### client.Licensees
+
+| Method | HTTP | Summary |
+|---|---|---|
+| `Firms(ctx, params)` | `GET /api/v1/licensees/firms` | Search licensed firms in a place |
+
+### client.Intelligence
+
+| Method | HTTP | Summary |
+|---|---|---|
+| `Signals(ctx, id, params)` | `GET /api/v1/parcels/{id}/signals` | Get evidence-backed property signals |
+| `Run(ctx, runID, params)` | `GET /api/v1/intelligence/runs/{runId}` | Read an owned retained run and evidence |
+| `CreateScenario(ctx, params)` | `POST /api/v1/intelligence/scenarios` | Save an explicit named residual scenario |
+| `Handoff(ctx, runID, params)` | `GET /api/v1/intelligence/runs/{runId}/handoff` | Prepare an owned structured investigation handoff |
 <!-- END GENERATED METHODS -->
 
 ## Regenerating from the spec

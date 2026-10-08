@@ -82,6 +82,7 @@ func buildLeadsFindRequest(params *LeadsFindParams) *apiRequest {
 		addQuery(req.query, "limit", params.Limit)
 		addQuery(req.query, "preview", params.Preview)
 		addQuery(req.query, "mail_ready", params.MailReady)
+		addQuery(req.query, "tax_delinquent", params.TaxDelinquent)
 		setHeader(req.header, "X-PAYMENT", params.Payment)
 	}
 	return req
@@ -127,6 +128,13 @@ type LeadsFindParams struct {
 	// delivered lead's `owner_contact.mail_ready` is the final word. Narrow with `county` in large
 	// states: the filter checks every candidate.
 	MailReady *bool `query:"mail_ready" json:"-"`
+
+	// true = only parcels on a treasurer's or tax collector's property-tax delinquency / lien-sale /
+	// tax-sale list as of today (status delinquent or in_sale; redeemed and sold never count; expired
+	// records never used). Pilot jurisdictions only: a parcel elsewhere never matches. false or absent
+	// = no filter. Requires an account, preview included (401 `account_required` otherwise).
+	// Parcel-grain signals only (400 on portfolio_owner).
+	TaxDelinquent *bool `query:"tax_delinquent" json:"-"`
 
 	// x402 payment, sent TOGETHER with your account credentials (Authorization: Bearer pz_...) -- a
 	// payment alone is not an account and is refused with 401 before it is verified: a base64-encoded
